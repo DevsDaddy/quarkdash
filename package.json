@@ -1,0 +1,63 @@
+{
+  "name": "quarkdash",
+  "version": "1.0.0",
+  "description": "QuarkDash - pure typescript hybrid cryptographic protocol that provides post-quantum security, high performance, and attack resistance.",
+  "keywords": [
+    "quark",
+    "dash",
+    "qd-256",
+    "quarkdash",
+    "encryption",
+    "crypto",
+    "protocol",
+    "binary",
+    "hybrid",
+    "fast",
+    "secure",
+    "quantum"
+  ],
+  "homepage": "https://github.com/DevsDaddy/quarkdash#readme",
+  "bugs": {
+    "url": "https://github.com/DevsDaddy/quarkdash/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DevsDaddy/quarkdash.git"
+  },
+  "license": "MIT",
+  "author": "Elijah Rastroguev",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && npm run build:esm && npm run build:cjs && npm run build:types",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist/types",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "bench": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' benchmarks/bench.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0",
+    "ws": "^8.14.0"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
