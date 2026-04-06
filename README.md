@@ -73,7 +73,7 @@ await bob.finalizeSession(ciphertext);
 const plain = QuarkDashUtils.textToBytes('Hello QuarkDash 🔒!');
 const enc = await alice.encrypt(plain);
 const dec = await bob.decrypt(enc);
-expect(QuarkDashUtils.bytesToText(dec)).toBe('Hello QuarkDash 🔒!');
+console.log("Decrypted:", QuarkDashUtils.bytesToText(dec));
 ```
 
 ### NPM Commands
