@@ -9,6 +9,7 @@
  */
 import {CipherType, QuarkDash, QuarkDashUtils} from "../src";
 
+/* Describe tests */
 describe('QuarkDash crypto algorithm tests', () => {
     let alice: QuarkDash;
     let bob: QuarkDash;
@@ -47,8 +48,10 @@ describe('QuarkDash crypto algorithm tests', () => {
         await bob.finalizeSession(ciphertext);
 
         const plain = QuarkDashUtils.textToBytes('Hello QuarkDash 🔒!');
+        console.log("Plain Text:", QuarkDashUtils.bytesToText(plain))
         const enc = await alice.encrypt(plain);
         const dec = await bob.decrypt(enc);
+        console.log("Decrypted Text:", QuarkDashUtils.bytesToText(dec))
         expect(QuarkDashUtils.bytesToText(dec)).toBe('Hello QuarkDash 🔒!');
     });
 

@@ -8,6 +8,7 @@
  * @website         https://dev.to/devsdaddy
  */
 import crypto from "crypto";
+import {Shake256} from "./shake";
 
 /**
  * Crypto Utils Class
@@ -17,52 +18,13 @@ export class QuarkDashUtils {
     private static HEXChars : string = '0123456789abcdef';
 
     /**
-     * Run SHA256 async
-     * @param data {Uint8Array} Bytes buffer
-     * @return {Promise<Uint8Array>} Result
-     */
-    public static async sha256(data: Uint8Array): Promise<Uint8Array> {
-        const hash = await crypto.subtle.digest('SHA-256', data);
-        return new Uint8Array(hash);
-    }
-
-    /**
-     * Run SHA256 sync
-     * @param data {Uint8Array} Bytes buffer
-     * @return {Uint8Array} Result
-     */
-    public static sha256Sync(data: Uint8Array): Uint8Array {
-        if (typeof require !== 'undefined') {
-            const crypto = require('crypto');
-            const hash = crypto.createHash('sha256').update(data).digest();
-            return new Uint8Array(hash);
-        }
-        throw new Error('Synchronous SHA256 not available in browser');
-    }
-
-    /**
      * Get Shake-256 result async
      * @param data {Uint8Array} Bytes buffer
      * @param len {number} Buffer length
      * @return {Promise<Uint8Array>} Result buffer
      */
     public static async shake256(data: Uint8Array, len: number): Promise<Uint8Array> {
-        const result = new Uint8Array(len);
-        let counter = 0;
-        let offset = 0;
-        while (offset < len) {
-            const cnt = new Uint8Array(4);
-            cnt[0] = (counter >> 24) & 0xFF;
-            cnt[1] = (counter >> 16) & 0xFF;
-            cnt[2] = (counter >> 8) & 0xFF;
-            cnt[3] = counter & 0xFF;
-            const hash = await this.sha256(this.concatBytes(data, cnt));
-            const take = Math.min(hash.length, len - offset);
-            result.set(hash.slice(0, take), offset);
-            offset += take;
-            counter++;
-        }
-        return result;
+        return await Shake256.hash(data, len);
     }
 
     /**
@@ -72,22 +34,7 @@ export class QuarkDashUtils {
      * @return {Uint8Array} Result buffer
      */
     public static shake256Sync(data: Uint8Array, len: number): Uint8Array {
-        const result = new Uint8Array(len);
-        let counter = 0;
-        let offset = 0;
-        while (offset < len) {
-            const cnt = new Uint8Array(4);
-            cnt[0] = (counter >> 24) & 0xFF;
-            cnt[1] = (counter >> 16) & 0xFF;
-            cnt[2] = (counter >> 8) & 0xFF;
-            cnt[3] = counter & 0xFF;
-            const hash = this.sha256Sync(this.concatBytes(data, cnt));
-            const take = Math.min(hash.length, len - offset);
-            result.set(hash.slice(0, take), offset);
-            offset += take;
-            counter++;
-        }
-        return result;
+        return Shake256.hashSync(data, len);
     }
 
     /**
