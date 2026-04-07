@@ -10,6 +10,7 @@
 /* Import Required Modules */
 import {ICryptoEncapsulated, ICryptoKeyPair, IKeyExchange} from "./types";
 import {QuarkDashUtils} from "./utils";
+import {SHA256} from "./sha";
 
 /**
  * Ring-LWE based key exchange implementation
@@ -231,41 +232,58 @@ export class QuarkDashKeyExchange implements IKeyExchange {
      * @returns {ICryptoEncapsulated} Encapsulated data
      */
     public encapsulateSync(publicKey: Uint8Array): ICryptoEncapsulated {
-        const aBytes = publicKey.slice(0, QuarkDashKeyExchange.N*2);
-        const bBytes = publicKey.slice(QuarkDashKeyExchange.N*2);
+        const aBytes = publicKey.slice(0, QuarkDashKeyExchange.N * 2);
+        const bBytes = publicKey.slice(QuarkDashKeyExchange.N * 2);
         const a = QuarkDashKeyExchange.deserializePoly(aBytes);
         const b = QuarkDashKeyExchange.deserializePoly(bBytes);
         const sp = QuarkDashKeyExchange.smallPoly();
         const ep = QuarkDashKeyExchange.smallPoly();
-        const uArr = QuarkDashKeyExchange.multiply(a,sp);
-        for(let i=0; i<QuarkDashKeyExchange.N; i++) uArr[i] = (uArr[i]+ep[i]) % QuarkDashKeyExchange.Q;
-        const w = QuarkDashKeyExchange.multiply(b,sp);
-        const shared = QuarkDashKeyExchange.roundToBits(w);
+        const uArr = QuarkDashKeyExchange.multiply(a, sp);
+        for (let i = 0; i < QuarkDashKeyExchange.N; i++) uArr[i] = (uArr[i] + ep[i]) % QuarkDashKeyExchange.Q;
+        const w = QuarkDashKeyExchange.multiply(b, sp);
+        const rawSecret = QuarkDashKeyExchange.roundToBits(w);
         const ciphertext = QuarkDashKeyExchange.serializePoly(uArr);
-        return { ciphertext, sharedSecret: shared };
+        const sharedSecret = this.hashSharedSecret(rawSecret, publicKey, ciphertext);
+        return { ciphertext, sharedSecret };
     }
 
     /**
      * Decapsulate async
      * @param privateKey {Uint8Array} Private key buffer
+     * @param peerPublicKey {Uint8Array} Peer public key
      * @param ciphertext {Uint8Array} Cipher text buffer
      * @returns {Promise<Uint8Array>} Buffer data
      * TODO: GPU Calculations
      */
-    public async decapsulate(privateKey: Uint8Array, ciphertext: Uint8Array): Promise<Uint8Array> {
-        return this.decapsulateSync(privateKey, ciphertext);
+    public async decapsulate(privateKey: Uint8Array, peerPublicKey: Uint8Array, ciphertext: Uint8Array): Promise<Uint8Array> {
+        return this.decapsulateSync(privateKey, peerPublicKey, ciphertext);
     }
 
     /**
      * Decapsulate sync
      * @param privateKey {Uint8Array} Private key buffer
+     * @param peerPublicKey{Uint8Array} Peer public key buffer
      * @param ciphertext {Uint8Array} Cipher text buffer
      * @returns {Uint8Array} Buffer data
      */
-    public decapsulateSync(privateKey: Uint8Array, ciphertext: Uint8Array): Uint8Array {
+    public decapsulateSync(privateKey: Uint8Array, peerPublicKey: Uint8Array, ciphertext: Uint8Array): Uint8Array {
         const s = QuarkDashKeyExchange.deserializePoly(privateKey);
         const u = QuarkDashKeyExchange.deserializePoly(ciphertext);
-        const w = QuarkDashKeyExchange.multiply(u,s);
-        return QuarkDashKeyExchange.roundToBits(w);
+        const w = QuarkDashKeyExchange.multiply(u, s);
+        const rawSecret = QuarkDashKeyExchange.roundToBits(w);
+        return this.hashSharedSecret(rawSecret, peerPublicKey, ciphertext);
+    }
+
+    /**
+     * Hash shared secret
+     * @param ss {Uint8Array} Shared secret buffer
+     * @param publicKey {Uint8Array} Public key buffer
+     * @param ciphertext {Uint8Array} Cipher text buffer
+     * @returns {Uint8Array} Shared secret hash
+     * @private
+     */
+    private hashSharedSecret(ss: Uint8Array, publicKey: Uint8Array, ciphertext: Uint8Array): Uint8Array {
+        const data = QuarkDashUtils.concatBytes(ss, publicKey, ciphertext);
+        return SHA256.hash(data, true) as Uint8Array;
     }
 }
