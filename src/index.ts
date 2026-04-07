@@ -10,7 +10,10 @@
 /* Export Types and Utils */
 export * from "./types";
 export * from "./utils";
+
+/* Hash methods */
 export * from "./shake";
+export * from "./sha";
 
 /* Export KDF and MAC */
 export * from "./kdf";

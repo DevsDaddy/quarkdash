@@ -54,8 +54,8 @@ export interface IKeyExchange {
     generateKeyPairSync(): ICryptoKeyPair;
     encapsulate(publicKey: Uint8Array): Promise<ICryptoEncapsulated>;
     encapsulateSync(publicKey: Uint8Array): ICryptoEncapsulated;
-    decapsulate(privateKey: Uint8Array, ciphertext: Uint8Array): Promise<Uint8Array>;
-    decapsulateSync(privateKey: Uint8Array, ciphertext: Uint8Array): Uint8Array;
+    decapsulate(privateKey: Uint8Array, peerPublicKey: Uint8Array, ciphertext: Uint8Array): Promise<Uint8Array>;
+    decapsulateSync(privateKey: Uint8Array, peerPublicKey: Uint8Array, ciphertext: Uint8Array): Uint8Array;
 }
 
 /**

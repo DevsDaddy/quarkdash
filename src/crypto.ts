@@ -133,7 +133,7 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
      */
     public async finalizeSession(ciphertext: Uint8Array): Promise<void> {
         if (!this.myKeyPair || !this.peerPublicKey) throw new Error('Session not initialized');
-        const sharedSecret = await this.config.keyExchange.decapsulate(this.myKeyPair.privateKey, ciphertext);
+        const sharedSecret = await this.config.keyExchange.decapsulate(this.myKeyPair.privateKey, this.peerPublicKey, ciphertext);
         await this.deriveSessionKeys(sharedSecret);
     }
 
@@ -143,7 +143,7 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
      */
     public finalizeSessionSync(ciphertext: Uint8Array): void {
         if (!this.myKeyPair || !this.peerPublicKey) throw new Error('Session not initialized');
-        const sharedSecret = this.config.keyExchange.decapsulateSync(this.myKeyPair.privateKey, ciphertext);
+        const sharedSecret = this.config.keyExchange.decapsulateSync(this.myKeyPair.privateKey, this.peerPublicKey, ciphertext);
         this.deriveSessionKeysSync(sharedSecret);
     }
 
