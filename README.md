@@ -5,6 +5,8 @@
 
 > Have a questions? <a href="mailto:ilya@neurosell.top">Contact me</a>
 
+![QuarkDash Crypto NPM](https://badge.fury.io/js/quarkdash.svg) ![QuarkDash Crypto - MIT opensource](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 ---
 
 [About](#about-quarkdash-crypto) | [Get Started](#get-started) | [Example](#basic-example) | [Benchmark](#benchmark) | [Docs](https://github.com/devsdaddy/quarkdash/wiki)
