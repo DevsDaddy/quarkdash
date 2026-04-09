@@ -10,7 +10,6 @@
 import {CipherType, QuarkDash, QuarkDashUtils} from "../src";
 import {performance} from 'perf_hooks';
 
-// Вспомогательная функция для измерения
 /**
  * Performance Measure
  * @param name {string} Benchmark Name
@@ -26,26 +25,6 @@ async function measurePerf(name: string, fn: () => Promise<void>, iterations: nu
     const avgMs = (end - start) / iterations;
     console.log(`${name}: ${avgMs.toFixed(3)} ms/op`);
     return avgMs;
-}
-
-// Функция для измерения пропускной способности
-/**
- * Throughput Measure
- * @param name {string} Benchmark Name
- * @param fn {Function} Function
- * @param iterations {number} Number of iterations
- */
-async function measureThroughput(name: string, fn: () => Promise<Uint8Array>, iterations: number = 10): Promise<void> {
-    let totalBytes = 0;
-    const start = performance.now();
-    for (let i = 0; i < iterations; i++) {
-        const result = await fn();
-        totalBytes += result.length;
-    }
-    const end = performance.now();
-    const seconds = (end - start) / 1000;
-    const mbps = (totalBytes / seconds) / (1024 * 1024);
-    console.log(`${name}: ${mbps.toFixed(2)} MB/s (${(totalBytes / (1024 * 1024)).toFixed(2)} MB in ${seconds.toFixed(3)} s)`);
 }
 
 /**

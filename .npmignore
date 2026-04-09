@@ -2,3 +2,5 @@ tests/
 benchmarks/
 jest.config.js
 .gitignore
+.idea
+coverage

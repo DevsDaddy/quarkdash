@@ -1,6 +1,6 @@
 {
   "name": "quarkdash",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "QuarkDash - pure typescript hybrid cryptographic protocol that provides post-quantum security, high performance, and attack resistance.",
   "keywords": [
     "quark",
