@@ -3,10 +3,10 @@
  *
  * @author                Elijah Rastorguev
  * @version               1.0.0
- * @build                 1004
+ * @build           1005
  * @git                   https://github.com/devsdaddy/bitwarp
  * @license               MIT
- * @updated               12.04.2026
+ * @updated         12.04.2026
  */
 import { Project, SyntaxKind } from "ts-morph";
 import { execSync } from "child_process";
@@ -55,7 +55,7 @@ async function updateJSDocInChangedFiles() {
                     const currentBuild = parseInt(commentText.trim(), 10);
                     if (!isNaN(currentBuild)) {
                         const newBuild = currentBuild + 1;
-                        buildTag.replaceWithText(`@build                 ${newBuild}`);
+                        buildTag.replaceWithText(`@build           ${newBuild}`);
                         fileWasModified = true;
                         console.log(`  -> File: ${sourceFile.getFilePath()}, @build updated from ${currentBuild} to ${newBuild}`);
                     }
@@ -64,7 +64,7 @@ async function updateJSDocInChangedFiles() {
 
             // Work with @updated
             if (updatedTag) {
-                updatedTag.replaceWithText(`@updated               ${formattedDate}`);
+                updatedTag.replaceWithText(`@updated         ${formattedDate}`);
                 fileWasModified = true;
                 console.log(`  -> File: ${sourceFile.getFilePath()}, @updated changed to ${formattedDate}`);
             }
