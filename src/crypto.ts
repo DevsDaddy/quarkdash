@@ -4,16 +4,18 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.0.0
  * @author          Elijah Rastorguev
- * @build           1000
+ * @build           1105
  * @website         https://dev.to/devsdaddy
+ * @updated         14.04.2026
  */
 /* Import Required Modules */
-import {CipherFactory, CipherType} from "./cipher";
-import {ICipher, ICryptoMethodAsync, ICryptoMethodSync, IKDF, IKeyExchange, IMAC} from "./types";
-import {QuarkDashKDF} from "./kdf";
-import {QuarkDashMAC} from "./mac";
-import {QuarkDashKeyExchange} from "./ringlwe";
-import {QuarkDashUtils} from "./utils";
+import {CipherFactory, CipherType} from "./cipher/cipher";
+import {ICipher, ICryptoMethodAsync, ICryptoMethodSync, IKDF, IKeyExchange, IMAC} from "./core/types";
+import {QuarkDashKDF} from "./core/kdf";
+import {QuarkDashMAC} from "./core/mac";
+import {QuarkDashUtils} from "./core/utils";
+import {QuarkDashRRLWE} from "./session/rringlwe";
+import {isWasmShake, Shake256Wasm} from "./hash/shake";
 
 /**
  * Quark Dash parsed encrypted packet
@@ -34,6 +36,10 @@ export interface QuarkDashOptions {
     keyExchange: IKeyExchange;
     maxPacketWindow: number;
     timestampToleranceMs: number;
+    WASM : {
+        isEnabled: boolean;
+        shakePath: string;
+    }
 }
 
 /**
@@ -43,9 +49,13 @@ const DEFAULT_OPTIONS : QuarkDashOptions = {
     cipher: CipherType.ChaCha20,
     kdf: new QuarkDashKDF(),
     mac: new QuarkDashMAC(),
-    keyExchange: new QuarkDashKeyExchange(),
+    keyExchange: new QuarkDashRRLWE(),
     maxPacketWindow: 1000,
     timestampToleranceMs: 300000,
+    WASM: {
+        isEnabled: true,
+        shakePath: "./wasm/shake.wasm",
+    }
 }
 
 /**
@@ -57,7 +67,6 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
     private cipher: ICipher | null = null;
     private macKey: Uint8Array | null = null;
     private sendSeq = 0;
-    private recvSeq = 0;
     private receivedPackets = new Set<number>();
     private myKeyPair?: { publicKey: Uint8Array; privateKey: Uint8Array };
     private peerPublicKey?: Uint8Array;
@@ -76,6 +85,10 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
      * TODO: GPU Computing
      */
     public async generateKeyPair(): Promise<Uint8Array> {
+        // Initialize WASM Modules at first time
+        if(this.config.WASM.isEnabled && !isWasmShake()) await Shake256Wasm.initWasm(this.config.WASM.shakePath);
+
+        // Generate key pair
         this.myKeyPair = await this.config.keyExchange.generateKeyPair();
         return this.myKeyPair.publicKey;
     }
@@ -197,8 +210,13 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
         if (!this.cipher || !this.macKey) throw new Error('Session not established');
         const metadata = this.buildMetadata();
         const encrypted = await this.cipher.encrypt(decryptedData);
-        const mac = await this.config.mac.sign(QuarkDashUtils.concatBytes(metadata, encrypted), this.macKey);
-        return QuarkDashUtils.concatBytes(metadata, encrypted, mac);
+        let s1 = performance.now();
+        const mac = await this.config.mac.signTwo(metadata, encrypted, this.macKey);
+        const result = new Uint8Array(metadata.length + encrypted.length + mac.length);
+        result.set(metadata, 0);
+        result.set(encrypted, metadata.length);
+        result.set(mac, metadata.length + encrypted.length);
+        return result;
     }
 
     /**
@@ -266,9 +284,14 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
     private buildMetadata(): Uint8Array {
         const metadata = new Uint8Array(12);
         const timestamp = BigInt(Date.now());
-        for (let i = 0; i < 8; i++) metadata[i] = Number((timestamp >> BigInt(i*8)) & 0xFFn);
+        for (let i = 0; i < 8; i++) {
+            metadata[i] = Number((timestamp >> BigInt(i * 8)) & 0xFFn);
+        }
         const seq = this.sendSeq++;
-        for (let i = 0; i < 4; i++) metadata[8+i] = (seq >> (i*8)) & 0xFF;
+        metadata[8] = seq & 0xFF;
+        metadata[9] = (seq >> 8) & 0xFF;
+        metadata[10] = (seq >> 16) & 0xFF;
+        metadata[11] = (seq >> 24) & 0xFF;
         return metadata;
     }
 

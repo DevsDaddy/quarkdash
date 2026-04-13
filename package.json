@@ -39,26 +39,34 @@
   "scripts": {
     "update-docs": "ts-node docutil.ts",
     "clean": "rm -rf dist",
-    "build": "npm run clean && npm run update-docs && npm run build:esm && npm run build:cjs && npm run build:types",
+    "build": "npm run clean && npm run update-docs && npm run build:esm && npm run build:cjs && npm run build:types && npm run copy_wasm",
     "build:esm": "tsc -p tsconfig.json",
     "build:cjs": "tsc -p tsconfig.cjs.json",
     "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist/types",
+    "copy_wasm": "cp -r \"wasm/shake.wasm\" \"dist/\"",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "bench": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' benchmarks/bench.ts",
     "prepublishOnly": "npm run build && npm test"
   },
+  "files": [
+    "wasm", "dist"
+  ],
   "devDependencies": {
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
-    "ts-morph": "^27.0.2",
+    "copyfiles": "^2.4.1",
     "jest": "^29.5.0",
     "ts-jest": "^29.1.0",
+    "ts-morph": "^27.0.2",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0",
     "ws": "^8.14.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7"
+  },
   "engines": {
     "node": ">=16.0.0"
   }

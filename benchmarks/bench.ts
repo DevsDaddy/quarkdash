@@ -4,7 +4,7 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.0.0
  * @author          Elijah Rastorguev
- * @build           1000
+ * @build           1003
  * @website         https://dev.to/devsdaddy
  */
 import {CipherType, QuarkDash, QuarkDashUtils} from "../src";
@@ -14,16 +14,13 @@ import {performance} from 'perf_hooks';
  * Performance Measure
  * @param name {string} Benchmark Name
  * @param fn {Function} Function
- * @param iterations {number} Number of iterations
  */
-async function measurePerf(name: string, fn: () => Promise<void>, iterations: number = 100): Promise<number> {
+async function measurePerf(name: string, fn: () => Promise<void>): Promise<number> {
     const start = performance.now();
-    for (let i = 0; i < iterations; i++) {
-        await fn();
-    }
+    await fn();
     const end = performance.now();
-    const avgMs = (end - start) / iterations;
-    console.log(`${name}: ${avgMs.toFixed(3)} ms/op`);
+    const avgMs = end - start;
+    console.log(`${name}: ${avgMs.toFixed(3)} ms`);
     return avgMs;
 }
 
@@ -31,46 +28,60 @@ async function measurePerf(name: string, fn: () => Promise<void>, iterations: nu
  * Create Benchmark
  */
 async function main() {
-    console.log("=== QuarkDash Crypto Benchmark ===\n");
+    let byteslen = 1024 * 60;
+    const plain1KB = QuarkDashUtils.randomBytes(byteslen);
+    console.log('\x1b[1m%s\x1b[0m', `=== Bench at ${Math.round(byteslen/1024)} KB ===`);
+    console.log('\x1b[1m%s\x1b[0m', '=== QuarkDash Crypto ===');
 
-    // 1. Установка сессии (KEM + KDF)
-    const alice = new QuarkDash({ cipher: CipherType.ChaCha20 });
-    const bob = new QuarkDash({ cipher: CipherType.ChaCha20 });
-    const alicePub = await alice.generateKeyPair();
-    const bobPub = await bob.generateKeyPair();
+    // KEM + KDF
+    const client = new QuarkDash({ cipher: CipherType.Gimli });
+    const server = new QuarkDash({ cipher: CipherType.Gimli });
+    let clientPub : Uint8Array = new Uint8Array(0), serverPub : Uint8Array = new Uint8Array(0);
+    await measurePerf('Generate Key Pairs (Client + Server)', async () => {
+        clientPub = await client.generateKeyPair();
+        serverPub = await server.generateKeyPair();
+    });
 
-    await measurePerf('Session establishment (Alice encapsulate)', async () => {
-        await alice.initializeSession(bobPub, true);
-    }, 50);
+    // Initialize sessions
+    await measurePerf('Session establishment (client encapsulate)', async () => {
+        await client.initializeSession(serverPub, true);
+    });
 
-    // Measure for second client
-    const ciphertext = await alice.initializeSession(bobPub, true) as Uint8Array;
-    await measurePerf('Session establishment (Bob decapsulate)', async () => {
-        await bob.initializeSession(alicePub, false);
-        await bob.finalizeSession(ciphertext);
-    }, 50);
+    const ciphertext = await client.initializeSession(serverPub, true) as Uint8Array;
+    await measurePerf('Session establishment (server decapsulate)', async () => {
+        await server.initializeSession(clientPub, false);
+        await server.finalizeSession(ciphertext);
+    });
 
-    // 3. Compare with Native AES-256-GCM (only for Node.js)
+    // Encrypt
+    let encrypted : Uint8Array, decrypted : Uint8Array;
+    await measurePerf('Encryption (client)', async () => {
+        encrypted = await client.encrypt(plain1KB);
+    });
+    await measurePerf('Decryption (server)', async () => {
+        decrypted = await server.decrypt(encrypted);
+    })
+
+    // Compare with AES
     if (typeof require !== 'undefined') {
         const crypto = require('crypto');
-        console.log("\n--- Comparison with Node.js native AES-256-GCM ---");
+        console.log('\x1b[1m%s\x1b[0m', '\n=== AES GSM ===');
         const aesKey = crypto.randomBytes(32);
         const iv = crypto.randomBytes(12);
-        const plain1KB = QuarkDashUtils.randomBytes(1024);
 
         const startAes = performance.now();
         const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv);
         const encryptedAes = Buffer.concat([cipher.update(plain1KB), cipher.final()]);
         const authTag = cipher.getAuthTag();
         const endAes = performance.now();
-        console.log(`AES-256-GCM encrypt 1KB: ${(endAes - startAes).toFixed(3)} ms`);
+        console.log(`AES-256-GCM encrypt: ${(endAes - startAes).toFixed(3)} ms`);
 
         const decipher = crypto.createDecipheriv('aes-256-gcm', aesKey, iv);
         decipher.setAuthTag(authTag);
         const startDecAes = performance.now();
         const decryptedAes = Buffer.concat([decipher.update(encryptedAes), decipher.final()]);
         const endDecAes = performance.now();
-        console.log(`AES-256-GCM decrypt 1KB: ${(endDecAes - startDecAes).toFixed(3)} ms`);
+        console.log(`AES-256-GCM decrypt: ${(endDecAes - startDecAes).toFixed(3)} ms`);
     }
 
     console.log("\n=== Benchmark completed ===");

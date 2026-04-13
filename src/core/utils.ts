@@ -2,13 +2,13 @@
  * QuarkDash Crypto Utils
  *
  * @git             https://github.com/devsdaddy/quarkdash
- * @version         1.0.0
+ * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1000
+ * @build           1001
  * @website         https://dev.to/devsdaddy
+ * @updated         13.04.2026
  */
-import crypto from "crypto";
-import {Shake256} from "./shake";
+import {Shake256} from "../hash/shake";
 
 /**
  * Crypto Utils Class
@@ -286,5 +286,27 @@ export class QuarkDashUtils {
         let v = 0n;
         for (let i = 0; i < 8; i++) v |= BigInt(arr[off+i]) << BigInt(i*8);
         return v;
+    }
+
+    /**
+     * Read Uint32 Little Endian Value
+     * @param arr {Uint8Array} Buffer
+     * @param off {number} Offset
+     */
+    public static readUint32LE(arr: Uint8Array, off: number): number {
+        return (arr[off] | (arr[off + 1] << 8) | (arr[off + 2] << 16) | (arr[off + 3] << 24)) >>> 0;
+    }
+
+    /**
+     * Write Uint32 Little Endian Value
+     * @param v {number} Value
+     * @param arr {Uint8Array} Buffer
+     * @param off {number} Offset
+     */
+    public static writeUint32LE(v: number, arr: Uint8Array, off: number): void {
+        arr[off] = v & 0xFF;
+        arr[off + 1] = (v >>> 8) & 0xFF;
+        arr[off + 2] = (v >>> 16) & 0xFF;
+        arr[off + 3] = (v >>> 24) & 0xFF;
     }
 }

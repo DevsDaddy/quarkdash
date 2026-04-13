@@ -2,10 +2,11 @@
  * QuarkDash Crypto Types
  *
  * @git             https://github.com/devsdaddy/quarkdash
- * @version         1.0.0
+ * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1000
+ * @build           1001
  * @website         https://dev.to/devsdaddy
+ * @updated         13.04.2026
  */
 /**
  * Crypto methods async interface
@@ -41,8 +42,10 @@ export interface IKDF {
  */
 export interface IMAC {
     sign(data: Uint8Array, key: Uint8Array): Promise<Uint8Array>;
+    signTwo(data1: Uint8Array, data2: Uint8Array, key: Uint8Array): Promise<Uint8Array>; // новая
     verify(data: Uint8Array, key: Uint8Array, tag: Uint8Array): Promise<boolean>;
     signSync(data: Uint8Array, key: Uint8Array): Uint8Array;
+    signTwoSync(data1: Uint8Array, data2: Uint8Array, key: Uint8Array): Uint8Array;
     verifySync(data: Uint8Array, key: Uint8Array, tag: Uint8Array): boolean;
 }
 
