@@ -9,13 +9,15 @@
 
 ---
 
-[About](#about-quarkdash-crypto) | [Get Started](#get-started) | [Example](#basic-example) | [Benchmark](#benchmark) | [Docs](https://github.com/devsdaddy/quarkdash/wiki)
+[About](#about-quarkdash-crypto) | [Get Started](#get-started) | [Example](#basic-example) | [Benchmark](#benchmark) | [Docs](https://github.com/devsdaddy/quarkdash/wiki) | [Scheme](https://app.holst.so/share/b/7ae942f8-8a40-42c9-9991-3b624f147da8)
 
 ---
 
 ## About QuarkDash Crypto
 **QuarkDash Crypto** - It is a hybrid cryptographic protocol that provides post-quantum security, high performance, and attack resistance.
 This library can be used as shared solution for client and server. Written on **pure typescript**. **Dependency-free**.
+
+> Algorithm Scheme [can be found here](https://app.holst.so/share/b/7ae942f8-8a40-42c9-9991-3b624f147da8)
 
 ### ❓ Why QuarkDash Crypto?<br/>
 🔹 **Lightweight library** with zero dependencies;<br/>
@@ -105,7 +107,7 @@ Below I've outlined a brief step-by-step flowchart of how the algorithm works. I
 4. Message Encryption (AEAD);
 5. Decryption;
 
-[Read more about algorithm in Wiki](https://github.com/devsdaddy/quarkdash)
+> [Read more about algorithm in Wiki](https://github.com/devsdaddy/quarkdash) or [View scheme](https://app.holst.so/share/b/7ae942f8-8a40-42c9-9991-3b624f147da8)
 
 ---
 
