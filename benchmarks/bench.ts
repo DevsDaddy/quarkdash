@@ -4,7 +4,7 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.0.0
  * @author          Elijah Rastorguev
- * @build           1002
+ * @build           1003
  * @website         https://dev.to/devsdaddy
  */
 import {CipherType, QuarkDash, QuarkDashUtils} from "../src";

@@ -4,10 +4,13 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1001
+ * @build           1005
  * @website         https://dev.to/devsdaddy
- * @updated         13.04.2026
+ * @updated         14.04.2026
  */
+/* Import required modules */
+import { loadWasmModule } from "../core/wasm_loader";
+
 // Shake256 Constants
 const KECCAK_ROUNDS = 24;
 const RATE_BYTES = 136;
@@ -22,6 +25,89 @@ const RC: number[] = [
     0x80008002, 0x00000080, 0x0000800a, 0x8000000a,
     0x80008081, 0x00008080, 0x80000001, 0x80008008
 ];
+
+/**
+ * Shake-256 Web Assembly Implementation
+ */
+export class Shake256Wasm {
+    // WASM Instances
+    public static initializedWasm = false;
+    private static instance: WebAssembly.Instance | null = null;
+    private static memory: WebAssembly.Memory | null = null;
+    private static shake256Func: ((inputPtr: number, inputLen: number, outputPtr: number, outputLen: number) => void) | null = null;
+    private static nextPtr: number = 0;
+
+    /**
+     * Alloc
+     * @param size
+     * @private
+     */
+    private static alloc(size: number): number {
+        const ptr = this.nextPtr;
+        this.nextPtr += size;
+        return ptr;
+    }
+
+    /**
+     * Initialize WASM Module
+     * @param wasmUrl {string} Path to module
+     */
+    public static async initWasm(wasmUrl: string): Promise<void> {
+        try{
+            if(this.initializedWasm) return Promise.resolve();
+
+            // Initialize Module
+            const module = await loadWasmModule(wasmUrl);
+            const imports = {
+                env: {
+                    memory: new WebAssembly.Memory({ initial: 256, maximum: 512 }),
+                }
+            };
+
+            this.instance = await WebAssembly.instantiate(module, imports);
+            const exports = this.instance.exports as any;
+            this.shake256Func = exports.shake256;
+            this.memory = imports.env.memory;
+            this.nextPtr = 0;
+            this.initializedWasm = true;
+        }catch(e){
+            console.error(`WASM module initialization error. Switched to fallback.`);
+            this.initializedWasm = false;
+        }
+    }
+
+    /**
+     * Shake 256 Using WASM
+     * @param input {Uint8Array} Input buffer
+     * @param outputLen {number} Output length
+     * @returns {Uint8Array} Output buffer
+     */
+    public static shake256Wasm(input: Uint8Array, outputLen: number): Uint8Array {
+        try{
+            if (!this.shake256Func || !this.memory) throw new Error('WASM not initialized. Call initWasm() first.');
+            const mem = new Uint8Array(this.memory.buffer);
+            const inputPtr = this.alloc(input.length);
+            const outputPtr = this.alloc(outputLen);
+            mem.set(input, inputPtr);
+            this.shake256Func(inputPtr, input.length, outputPtr, outputLen);
+            const output = new Uint8Array(outputLen);
+            output.set(mem.slice(outputPtr, outputPtr + outputLen));
+            return output;
+        }catch (e){
+            // Not supported - fallback to JS
+            console.log("WASM Shake is not supported on this platform. Switched to fallback.")
+            this.initializedWasm = false;
+            return Shake256.hashSync(input, outputLen);
+        }
+    }
+}
+
+/**
+ * Returns is wasm shake or not
+ */
+export function isWasmShake() {
+    return Shake256Wasm.initializedWasm;
+}
 
 /**
  * Keccak State

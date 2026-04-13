@@ -4,14 +4,14 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1001
+ * @build           1003
  * @website         https://dev.to/devsdaddy
- * @updated         13.04.2026
+ * @updated         14.04.2026
  */
 /* Import Required Modules */
 import {IMAC} from "./types";
 import {QuarkDashUtils} from "./utils";
-import {Shake256} from "../hash/shake";
+import {Shake256, Shake256Wasm, isWasmShake} from "../hash/shake";
 
 /**
  * MAC implementation using Shake-256
@@ -32,7 +32,7 @@ export class QuarkDashMAC implements IMAC {
      */
     public async sign(data: Uint8Array, key: Uint8Array): Promise<Uint8Array> {
         const full = QuarkDashUtils.concatBytes(key, data);
-        return await QuarkDashUtils.shake256(full, 32);
+        return (isWasmShake()) ? Shake256Wasm.shake256Wasm(full, 32) : Shake256.hash(full, 32);
     }
 
     /**
@@ -63,7 +63,7 @@ export class QuarkDashMAC implements IMAC {
         this.tempBuffer.set(key, 0);
         this.tempBuffer.set(data1, key.length);
         this.tempBuffer.set(data2, key.length + data1.length);
-        return Shake256.hash(this.tempBuffer.subarray(0, totalLen), 32);
+        return (isWasmShake()) ? Shake256Wasm.shake256Wasm(this.tempBuffer.subarray(0, totalLen), 32) : Shake256.hash(this.tempBuffer.subarray(0, totalLen), 32);
     }
 
     /**
@@ -79,7 +79,7 @@ export class QuarkDashMAC implements IMAC {
         combined.set(key, 0);
         combined.set(data1, key.length);
         combined.set(data2, key.length + data1.length);
-        return Shake256.hashSync(combined, 32);
+        return (isWasmShake()) ? Shake256Wasm.shake256Wasm(combined, 32) : Shake256.hashSync(combined, 32);
     }
 
     /**

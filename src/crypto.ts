@@ -4,9 +4,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.0.0
  * @author          Elijah Rastorguev
- * @build           1101
+ * @build           1105
  * @website         https://dev.to/devsdaddy
- * @updated         13.04.2026
+ * @updated         14.04.2026
  */
 /* Import Required Modules */
 import {CipherFactory, CipherType} from "./cipher/cipher";
@@ -15,6 +15,7 @@ import {QuarkDashKDF} from "./core/kdf";
 import {QuarkDashMAC} from "./core/mac";
 import {QuarkDashUtils} from "./core/utils";
 import {QuarkDashRRLWE} from "./session/rringlwe";
+import {isWasmShake, Shake256Wasm} from "./hash/shake";
 
 /**
  * Quark Dash parsed encrypted packet
@@ -35,6 +36,10 @@ export interface QuarkDashOptions {
     keyExchange: IKeyExchange;
     maxPacketWindow: number;
     timestampToleranceMs: number;
+    WASM : {
+        isEnabled: boolean;
+        shakePath: string;
+    }
 }
 
 /**
@@ -47,6 +52,10 @@ const DEFAULT_OPTIONS : QuarkDashOptions = {
     keyExchange: new QuarkDashRRLWE(),
     maxPacketWindow: 1000,
     timestampToleranceMs: 300000,
+    WASM: {
+        isEnabled: true,
+        shakePath: "./wasm/shake.wasm",
+    }
 }
 
 /**
@@ -58,7 +67,6 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
     private cipher: ICipher | null = null;
     private macKey: Uint8Array | null = null;
     private sendSeq = 0;
-    private recvSeq = 0;
     private receivedPackets = new Set<number>();
     private myKeyPair?: { publicKey: Uint8Array; privateKey: Uint8Array };
     private peerPublicKey?: Uint8Array;
@@ -77,6 +85,10 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
      * TODO: GPU Computing
      */
     public async generateKeyPair(): Promise<Uint8Array> {
+        // Initialize WASM Modules at first time
+        if(this.config.WASM.isEnabled && !isWasmShake()) await Shake256Wasm.initWasm(this.config.WASM.shakePath);
+
+        // Generate key pair
         this.myKeyPair = await this.config.keyExchange.generateKeyPair();
         return this.myKeyPair.publicKey;
     }
@@ -200,7 +212,6 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
         const encrypted = await this.cipher.encrypt(decryptedData);
         let s1 = performance.now();
         const mac = await this.config.mac.signTwo(metadata, encrypted, this.macKey);
-        console.log("MAC Speed:", performance.now() - s1)
         const result = new Uint8Array(metadata.length + encrypted.length + mac.length);
         result.set(metadata, 0);
         result.set(encrypted, metadata.length);

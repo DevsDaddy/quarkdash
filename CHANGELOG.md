@@ -7,7 +7,8 @@ Meet the updated **QuarkDash Crypto**. This version provide a production-ready o
 
 **What's new in 1.1.0?**
 - Refactored and optimized **ChaCha** and **Gimli** ciphers;
-- 
+- Optimized pure TypeScript **SHAKE256** and **MAC** implementation (speed-up x10 times);
+- Added **WASM** implementation (written on C) for **SHAKE256** implementation with fallback if not supported;
 
 ---
 
