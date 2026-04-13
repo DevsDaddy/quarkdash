@@ -2,14 +2,15 @@
  * QuarkDash Ciphers Implementation
  *
  * @git             https://github.com/devsdaddy/quarkdash
- * @version         1.0.0
+ * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1000
+ * @build           1001
  * @website         https://dev.to/devsdaddy
+ * @updated         13.04.2026
  */
 /* Import Required Modules */
-import {ICipher} from "./types";
-import {QuarkDashUtils} from "./utils";
+import {ICipher} from "../core/types";
+import {QuarkDashUtils} from "../core/utils";
 
 /**
  * Cipher Type

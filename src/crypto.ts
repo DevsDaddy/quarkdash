@@ -4,16 +4,18 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.0.0
  * @author          Elijah Rastorguev
- * @build           1000
+ * @build           1101
  * @website         https://dev.to/devsdaddy
+ * @updated         13.04.2026
  */
 /* Import Required Modules */
-import {CipherFactory, CipherType} from "./cipher";
-import {ICipher, ICryptoMethodAsync, ICryptoMethodSync, IKDF, IKeyExchange, IMAC} from "./types";
-import {QuarkDashKDF} from "./kdf";
-import {QuarkDashMAC} from "./mac";
-import {QuarkDashKeyExchange} from "./ringlwe";
-import {QuarkDashUtils} from "./utils";
+import {CipherFactory, CipherType} from "./cipher/cipher";
+import {ICipher, ICryptoMethodAsync, ICryptoMethodSync, IKDF, IKeyExchange, IMAC} from "./core/types";
+import {QuarkDashKDF} from "./core/kdf";
+import {QuarkDashMAC} from "./core/mac";
+import {QuarkDashRLWE} from "./session/ringlwe";
+import {QuarkDashUtils} from "./core/utils";
+import {QuarkDashRRLWE} from "./session/rringlwe";
 
 /**
  * Quark Dash parsed encrypted packet
@@ -43,7 +45,7 @@ const DEFAULT_OPTIONS : QuarkDashOptions = {
     cipher: CipherType.ChaCha20,
     kdf: new QuarkDashKDF(),
     mac: new QuarkDashMAC(),
-    keyExchange: new QuarkDashKeyExchange(),
+    keyExchange: new QuarkDashRRLWE(),
     maxPacketWindow: 1000,
     timestampToleranceMs: 300000,
 }
