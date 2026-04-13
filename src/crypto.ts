@@ -13,7 +13,6 @@ import {CipherFactory, CipherType} from "./cipher/cipher";
 import {ICipher, ICryptoMethodAsync, ICryptoMethodSync, IKDF, IKeyExchange, IMAC} from "./core/types";
 import {QuarkDashKDF} from "./core/kdf";
 import {QuarkDashMAC} from "./core/mac";
-import {QuarkDashRLWE} from "./session/ringlwe";
 import {QuarkDashUtils} from "./core/utils";
 import {QuarkDashRRLWE} from "./session/rringlwe";
 
@@ -199,8 +198,14 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
         if (!this.cipher || !this.macKey) throw new Error('Session not established');
         const metadata = this.buildMetadata();
         const encrypted = await this.cipher.encrypt(decryptedData);
-        const mac = await this.config.mac.sign(QuarkDashUtils.concatBytes(metadata, encrypted), this.macKey);
-        return QuarkDashUtils.concatBytes(metadata, encrypted, mac);
+        let s1 = performance.now();
+        const mac = await this.config.mac.signTwo(metadata, encrypted, this.macKey);
+        console.log("MAC Speed:", performance.now() - s1)
+        const result = new Uint8Array(metadata.length + encrypted.length + mac.length);
+        result.set(metadata, 0);
+        result.set(encrypted, metadata.length);
+        result.set(mac, metadata.length + encrypted.length);
+        return result;
     }
 
     /**
@@ -268,9 +273,14 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
     private buildMetadata(): Uint8Array {
         const metadata = new Uint8Array(12);
         const timestamp = BigInt(Date.now());
-        for (let i = 0; i < 8; i++) metadata[i] = Number((timestamp >> BigInt(i*8)) & 0xFFn);
+        for (let i = 0; i < 8; i++) {
+            metadata[i] = Number((timestamp >> BigInt(i * 8)) & 0xFFn);
+        }
         const seq = this.sendSeq++;
-        for (let i = 0; i < 4; i++) metadata[8+i] = (seq >> (i*8)) & 0xFF;
+        metadata[8] = seq & 0xFF;
+        metadata[9] = (seq >> 8) & 0xFF;
+        metadata[10] = (seq >> 16) & 0xFF;
+        metadata[11] = (seq >> 24) & 0xFF;
         return metadata;
     }
 

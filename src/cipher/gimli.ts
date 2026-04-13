@@ -18,6 +18,9 @@ export class QuarkDashGimli implements ICipher {
     // Key and Nonce
     private readonly key: Uint8Array;
     private readonly nonce: Uint8Array;
+    private static readonly BLOCK_SIZE = 48;
+    private static readonly BLOCKS_PER_BATCH = 32;   // 1536 байт за раз
+    private static readonly BATCH_SIZE = QuarkDashGimli.BLOCK_SIZE * QuarkDashGimli.BLOCKS_PER_BATCH;
 
     /**
      * Create Gimli Cipher
@@ -69,34 +72,61 @@ export class QuarkDashGimli implements ICipher {
      */
     private process(data: Uint8Array): Uint8Array {
         const out = new Uint8Array(data.length);
-        let block = 0;
-        let pos = 0;
-        while (pos < data.length) {
-            const ks = this.keystreamBlock(block);
-            const len = Math.min(48, data.length - pos);
-            for (let i = 0; i < len; i++) out[pos+i] = data[pos+i] ^ ks[i];
-            pos += len;
-            block++;
+        let offset = 0;
+        let blockCounter = 0;
+
+        while (offset < data.length) {
+            const blocksRemaining = Math.ceil((data.length - offset) / QuarkDashGimli.BLOCK_SIZE);
+            const blocksThisBatch = Math.min(QuarkDashGimli.BLOCKS_PER_BATCH, blocksRemaining);
+            const batchSize = blocksThisBatch * QuarkDashGimli.BLOCK_SIZE;
+
+            const keystream = this.generateKeystreamBatch(blockCounter, blocksThisBatch);
+
+            const bytesToProcess = Math.min(batchSize, data.length - offset);
+            for (let i = 0; i < bytesToProcess; i++) {
+                out[offset + i] = data[offset + i] ^ keystream[i];
+            }
+
+            offset += bytesToProcess;
+            blockCounter += blocksThisBatch;
         }
+
         return out;
     }
 
     /**
-     * Get keystream block
-     * @param counter {number} Counter
-     * @returns {Uint8Array} Result buffer
+     * Generate keystream batch
+     * @param startCounter {number} Start counter
+     * @param count {number} Count
      * @private
      */
-    private keystreamBlock(counter: number): Uint8Array {
+    private generateKeystreamBatch(startCounter: number, count: number): Uint8Array {
+        const out = new Uint8Array(count * QuarkDashGimli.BLOCK_SIZE);
         const state = new Uint32Array(12);
-        for (let i=0;i<8;i++) state[i] = QuarkDashUtils.readU32(this.key, i*4);
-        state[8] = QuarkDashUtils.readU32(this.nonce,0);
-        state[9] = QuarkDashUtils.readU32(this.nonce,4);
-        state[10] = QuarkDashUtils.readU32(this.nonce,8);
-        state[11] = counter;
-        for (let r=0;r<24;r++) this.gimliRound(state, r);
-        const out = new Uint8Array(48);
-        for(let i=0;i<12;i++) QuarkDashUtils.writeU32(state[i], out, i*4);
+
+        for (let i = 0; i < 8; i++) {
+            state[i] = QuarkDashUtils.readUint32LE(this.key, i * 4);
+        }
+        // Nonce
+        state[8] = QuarkDashUtils.readUint32LE(this.nonce, 0);
+        state[9] = QuarkDashUtils.readUint32LE(this.nonce, 4);
+        state[10] = QuarkDashUtils.readUint32LE(this.nonce, 8);
+
+        for (let block = 0; block < count; block++) {
+            state[11] = startCounter + block;
+
+            const working = new Uint32Array(state);
+
+            for (let round = 0; round < 24; round++) {
+                this.gimliRound(working, round);
+            }
+
+            const outOffset = block * QuarkDashGimli.BLOCK_SIZE;
+            for (let i = 0; i < 12; i++) {
+                QuarkDashUtils.writeUint32LE(working[i], out, outOffset + i * 4);
+            }
+        }
+
         return out;
     }
 
@@ -107,14 +137,24 @@ export class QuarkDashGimli implements ICipher {
      * @private
      */
     private gimliRound(state:Uint32Array, round:number){
-        for(let i=0;i<4;i++){
-            const x=state[i], y=state[i+4], z=state[i+8];
-            const newX = x ^ (z<<1) ^ ((y&z)<<2);
-            const newY = y ^ x ^ ((x|z)<<1);
-            const newZ = z ^ y ^ ((x&y)<<3);
-            state[i]=newX; state[i+4]=newY; state[i+8]=newZ;
+        for (let i = 0; i < 4; i++) {
+            const x = state[i];
+            const y = state[i + 4];
+            const z = state[i + 8];
+            const newX = x ^ (z << 1) ^ ((y & z) << 2);
+            const newY = y ^ x ^ ((x | z) << 1);
+            const newZ = z ^ y ^ ((x & y) << 3);
+            state[i] = newX;
+            state[i + 4] = newY;
+            state[i + 8] = newZ;
         }
-        const t=state[1]; state[1]=state[2]; state[2]=state[3]; state[3]=t;
-        if((round&3)===0) state[0] ^= (0x9e377900 | round);
+        // Перестановка слов
+        const t = state[1];
+        state[1] = state[2];
+        state[2] = state[3];
+        state[3] = t;
+        if ((round & 3) === 0) {
+            state[0] ^= (0x9e377900 | round);
+        }
     }
 }

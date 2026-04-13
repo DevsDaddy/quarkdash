@@ -42,8 +42,10 @@ export interface IKDF {
  */
 export interface IMAC {
     sign(data: Uint8Array, key: Uint8Array): Promise<Uint8Array>;
+    signTwo(data1: Uint8Array, data2: Uint8Array, key: Uint8Array): Promise<Uint8Array>; // новая
     verify(data: Uint8Array, key: Uint8Array, tag: Uint8Array): Promise<boolean>;
     signSync(data: Uint8Array, key: Uint8Array): Uint8Array;
+    signTwoSync(data1: Uint8Array, data2: Uint8Array, key: Uint8Array): Uint8Array;
     verifySync(data: Uint8Array, key: Uint8Array, tag: Uint8Array): boolean;
 }
 

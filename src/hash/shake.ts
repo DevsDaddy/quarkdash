@@ -8,26 +8,177 @@
  * @website         https://dev.to/devsdaddy
  * @updated         13.04.2026
  */
+// Shake256 Constants
+const KECCAK_ROUNDS = 24;
+const RATE_BYTES = 136;
+const RHO: number[] = [
+    0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14
+];
+const RC: number[] = [
+    0x00000001, 0x00008082, 0x8000808a, 0x80008000,
+    0x0000808b, 0x80000001, 0x80008081, 0x00008009,
+    0x0000008a, 0x00000088, 0x80008009, 0x8000000a,
+    0x8000808b, 0x0000008b, 0x80008089, 0x80008003,
+    0x80008002, 0x00000080, 0x0000800a, 0x8000000a,
+    0x80008081, 0x00008080, 0x80000001, 0x80008008
+];
+
+/**
+ * Keccak State
+ */
+export class KeccakState {
+    private readonly stateLow: Uint32Array;
+    private readonly stateHigh: Uint32Array;
+
+    /**
+     * Create Keccak State
+     */
+    constructor() {
+        this.stateLow = new Uint32Array(25);
+        this.stateHigh = new Uint32Array(25);
+    }
+
+    /**
+     * XOR of byte to state
+     * @param byte
+     * @param index
+     */
+    public absorbByte(byte: number, index: number): void {
+        const lane = index >> 3;
+        const shift = (index & 7) << 3;
+        if (shift < 32) {
+            this.stateLow[lane] ^= (byte << shift);
+        } else {
+            this.stateHigh[lane] ^= (byte << (shift - 32));
+        }
+    }
+
+    /**
+     * Extract byte from state
+     * @param index {number}
+     */
+    public extractByte(index: number): number {
+        const lane = index >> 3;
+        const shift = (index & 7) << 3;
+        let word: number;
+        if (shift < 32) {
+            word = this.stateLow[lane];
+        } else {
+            word = this.stateHigh[lane];
+        }
+        return (word >>> shift) & 0xFF;
+    }
+
+    /**
+     * Permute Keccak-f[1600]
+     */
+    public permute(): void {
+        const stateLow = this.stateLow;
+        const stateHigh = this.stateHigh;
+
+        for (let round = 0; round < KECCAK_ROUNDS; round++) {
+            // Theta step
+            const C0 = new Array(5);
+            const C1 = new Array(5);
+            for (let x = 0; x < 5; x++) {
+                let l = stateLow[x];
+                let h = stateHigh[x];
+                for (let y = 1; y < 5; y++) {
+                    const idx = x + y*5;
+                    l ^= stateLow[idx];
+                    h ^= stateHigh[idx];
+                }
+                C0[x] = l;
+                C1[x] = h;
+            }
+            const D0 = new Array(5);
+            const D1 = new Array(5);
+            for (let x = 0; x < 5; x++) {
+                const prev = (x+4)%5;
+                const next = (x+1)%5;
+                // rot(C[next], 1)
+                let rotL = C0[next];
+                let rotH = C1[next];
+                const t = (rotL >>> 31) | (rotH << 1);
+                rotH = (rotH >>> 31) | (rotL << 1);
+                rotL = t;
+                D0[x] = C0[prev] ^ rotL;
+                D1[x] = C1[prev] ^ rotH;
+            }
+            for (let i = 0; i < 25; i++) {
+                const x = i % 5;
+                stateLow[i] ^= D0[x];
+                stateHigh[i] ^= D1[x];
+            }
+
+            let x = 1, y = 0;
+            let curL = stateLow[1];
+            let curH = stateHigh[1];
+            for (let t = 0; t < 24; t++) {
+                const nx = y;
+                const ny = (2*x + 3*y) % 5;
+                const idx = nx + ny*5;
+                const nextL = stateLow[idx];
+                const nextH = stateHigh[idx];
+                const r = RHO[t+1];
+                // rot(cur, r)
+                let rotL = curL, rotH = curH;
+                if (r >= 32) {
+                    const r2 = r - 32;
+                    const tL = (rotL >>> r2) | (rotH << (32 - r2));
+                    const tH = (rotH >>> r2) | (rotL << (32 - r2));
+                    rotL = tL;
+                    rotH = tH;
+                } else if (r > 0) {
+                    const tL = (rotL >>> r) | (rotH << (32 - r));
+                    const tH = (rotH >>> r) | (rotL << (32 - r));
+                    rotL = tL;
+                    rotH = tH;
+                }
+                stateLow[idx] = rotL;
+                stateHigh[idx] = rotH;
+                curL = nextL;
+                curH = nextH;
+                x = nx;
+                y = ny;
+            }
+
+            for (let y = 0; y < 5; y++) {
+                const base = y*5;
+                const rowL0 = stateLow[base];
+                const rowH0 = stateHigh[base];
+                const rowL1 = stateLow[base+1];
+                const rowH1 = stateHigh[base+1];
+                const rowL2 = stateLow[base+2];
+                const rowH2 = stateHigh[base+2];
+                const rowL3 = stateLow[base+3];
+                const rowH3 = stateHigh[base+3];
+                const rowL4 = stateLow[base+4];
+                const rowH4 = stateHigh[base+4];
+                // new0 = row0 ^ ((~row1) & row2)
+                stateLow[base]   = rowL0 ^ ((~rowL1) & rowL2);
+                stateHigh[base]  = rowH0 ^ ((~rowH1) & rowH2);
+                stateLow[base+1] = rowL1 ^ ((~rowL2) & rowL3);
+                stateHigh[base+1]= rowH1 ^ ((~rowH2) & rowH3);
+                stateLow[base+2] = rowL2 ^ ((~rowL3) & rowL4);
+                stateHigh[base+2]= rowH2 ^ ((~rowH3) & rowH4);
+                stateLow[base+3] = rowL3 ^ ((~rowL4) & rowL0);
+                stateHigh[base+3]= rowH3 ^ ((~rowH4) & rowH0);
+                stateLow[base+4] = rowL4 ^ ((~rowL0) & rowL1);
+                stateHigh[base+4]= rowH4 ^ ((~rowH0) & rowH1);
+            }
+
+            // Iota step
+            stateLow[0] ^= RC[round] & 0xFFFFFFFF;
+            stateHigh[0] ^= (RC[round] >>> 0) & 0xFFFFFFFF;
+        }
+    }
+}
+
 /**
  * Shake-256 Hash
  */
 export class Shake256 {
-    /* Shake 256 Constants */
-    private static KECCAK_ROUNDS = 24;
-    private static RATE_BYTES = 136;
-    private static ROTATIONS: number[] = [
-        1,  3,  6,  10, 15, 21, 28, 36, 45, 55, 2,  14,
-        27, 41, 56, 8,  25, 43, 62, 18, 39, 61, 20, 44
-    ];
-    private static RC: bigint[] = [
-        0x0000000000000001n, 0x0000000000008082n, 0x800000000000808an, 0x8000000080008000n,
-        0x000000000000808bn, 0x0000000080000001n, 0x8000000080008081n, 0x8000000000008009n,
-        0x000000000000008an, 0x0000000000000088n, 0x0000000080008009n, 0x000000008000000an,
-        0x000000008000808bn, 0x800000000000008bn, 0x8000000000008089n, 0x8000000000008003n,
-        0x8000000000008002n, 0x8000000000000080n, 0x000000000000800an, 0x800000008000000an,
-        0x8000000080008081n, 0x8000000000008080n, 0x0000000080000001n, 0x8000000080008008n
-    ];
-
     /**
      * Shake-256 async
      * @param input {Uint8Array} Input buffer
@@ -56,109 +207,35 @@ export class Shake256 {
      * @private
      */
     private static process(input: Uint8Array, outputLength: number): Uint8Array {
-        const state = new Array(25).fill(0n);
-        // Absorb phase
+        const state = new KeccakState();
         let offset = 0;
-        let blockSize = this.RATE_BYTES;
-        while (offset < input.length) {
-            const block = input.subarray(offset, Math.min(offset + blockSize, input.length));
-            for (let i = 0; i < block.length; i++) {
-                const lane = i % 8;
-                const bytePos = i - lane;
-                const laneIdx = bytePos / 8;
-                const shift = BigInt(lane * 8);
-                const val = BigInt(block[i]) << shift;
-                state[laneIdx] ^= val;
+        const inputLen = input.length;
+
+        while (offset < inputLen) {
+            let blockSize = Math.min(RATE_BYTES, inputLen - offset);
+            for (let i = 0; i < blockSize; i++) {
+                state.absorbByte(input[offset + i], i);
             }
-            offset += block.length;
-            if (block.length === blockSize || offset >= input.length) {
-                // padding
-                if (offset >= input.length) {
-                    const lastByteIdx = block.length;
-                    const padByte = 0x1F; // domain for SHAKE256
-                    const laneIdx = Math.floor(lastByteIdx / 8);
-                    const shift = BigInt((lastByteIdx % 8) * 8);
-                    state[laneIdx] ^= (BigInt(padByte) << shift);
-                    // final padding bit
-                    const finalBytePos = lastByteIdx + 1;
-                    const finalLane = Math.floor(finalBytePos / 8);
-                    const finalShift = BigInt((finalBytePos % 8) * 8);
-                    state[finalLane] ^= (0x80n << finalShift);
+            offset += blockSize;
+            if (blockSize === RATE_BYTES || offset === inputLen) {
+                if (offset === inputLen) {
+                    state.absorbByte(0x1F, blockSize);
+                    state.absorbByte(0x80, blockSize + 1);
                 }
-                this.keccakF(state);
+                state.permute();
             }
         }
 
-        // Squeeze phase
-        const result = new Uint8Array(outputLength);
-        let outOffset = 0;
-        while (outOffset < outputLength) {
-            for (let lane = 0; lane < 25 && outOffset < outputLength; lane++) {
-                let val = state[lane];
-                for (let byte = 0; byte < 8 && outOffset < outputLength; byte++) {
-                    result[outOffset++] = Number(val & 0xFFn);
-                    val >>= 8n;
-                }
+        const out = new Uint8Array(outputLength);
+        let outPos = 0;
+        while (outPos < outputLength) {
+            for (let i = 0; i < RATE_BYTES && outPos < outputLength; i++) {
+                out[outPos++] = state.extractByte(i);
             }
-            if (outOffset < outputLength) {
-                this.keccakF(state);
+            if (outPos < outputLength) {
+                state.permute();
             }
         }
-        return result;
-    }
-
-    /**
-     * Keccak Function
-     * @param state {bigint[]} State array
-     * @private
-     */
-    private static keccakF(state: bigint[]): void {
-        for (let round = 0; round < this.KECCAK_ROUNDS; round++) {
-            // Theta
-            const C = new Array(5);
-            for (let x = 0; x < 5; x++) {
-                C[x] = state[x] ^ state[x+5] ^ state[x+10] ^ state[x+15] ^ state[x+20];
-            }
-            const D = new Array(5);
-            for (let x = 0; x < 5; x++) {
-                D[x] = C[(x+4)%5] ^ this.rot(C[(x+1)%5], 1n);
-            }
-            for (let x = 0; x < 5; x++) {
-                for (let y = 0; y < 5; y++) {
-                    state[x+5*y] ^= D[x];
-                }
-            }
-
-            // Rho and Pi
-            let current = state[1];
-            for (let i = 0; i < 24; i++) {
-                const nextIdx = (2 * ((i + 1) % 5) + 5*Math.floor((i+1)/5)) % 25;
-                const temp = state[nextIdx];
-                state[nextIdx] = this.rot(current, BigInt(this.ROTATIONS[i]));
-                current = temp;
-            }
-
-            // Chi
-            for (let y = 0; y < 5; y++) {
-                const row = state.slice(y*5, y*5+5);
-                for (let x = 0; x < 5; x++) {
-                    state[y*5 + x] = row[x] ^ ((~row[(x+1)%5]) & row[(x+2)%5]);
-                }
-            }
-
-            // Iota
-            state[0] ^= this.RC[round];
-        }
-    }
-
-    /**
-     * Rotate function
-     * @param x {number}
-     * @param n {number}
-     * @private
-     */
-    private static rot(x: bigint, n: bigint): bigint {
-        const mask = (1n << 64n) - 1n;
-        return ((x << n) | (x >> (64n - n))) & mask;
+        return out;
     }
 }

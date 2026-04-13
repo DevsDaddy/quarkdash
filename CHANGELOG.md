@@ -2,6 +2,13 @@
 Welcome to the **QuarkDash Crypto** changelog.
 Here you can find information about all stable algorithm versions.
 
+# v.1.1.0
+Meet the updated **QuarkDash Crypto**. This version provide a production-ready optimization for heavy calculations inside.
+
+**What's new in 1.1.0?**
+- Refactored and optimized **ChaCha** and **Gimli** ciphers;
+- 
+
 ---
 
 ### v.1.0.8

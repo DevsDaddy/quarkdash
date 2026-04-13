@@ -14,15 +14,12 @@ import {performance} from 'perf_hooks';
  * Performance Measure
  * @param name {string} Benchmark Name
  * @param fn {Function} Function
- * @param iterations {number} Number of iterations
  */
-async function measurePerf(name: string, fn: () => Promise<void>, iterations: number = 100): Promise<number> {
+async function measurePerf(name: string, fn: () => Promise<void>): Promise<number> {
     const start = performance.now();
-    for (let i = 0; i < iterations; i++) {
-        await fn();
-    }
+    await fn();
     const end = performance.now();
-    const avgMs = (end - start) / iterations;
+    const avgMs = end - start;
     console.log(`${name}: ${avgMs.toFixed(3)} ms`);
     return avgMs;
 }
@@ -37,8 +34,8 @@ async function main() {
     console.log('\x1b[1m%s\x1b[0m', '=== QuarkDash Crypto ===');
 
     // KEM + KDF
-    const client = new QuarkDash({ cipher: CipherType.ChaCha20 });
-    const server = new QuarkDash({ cipher: CipherType.ChaCha20 });
+    const client = new QuarkDash({ cipher: CipherType.Gimli });
+    const server = new QuarkDash({ cipher: CipherType.Gimli });
     let clientPub : Uint8Array = new Uint8Array(0), serverPub : Uint8Array = new Uint8Array(0);
     await measurePerf('Generate Key Pairs (Client + Server)', async () => {
         clientPub = await client.generateKeyPair();
@@ -48,22 +45,22 @@ async function main() {
     // Initialize sessions
     await measurePerf('Session establishment (client encapsulate)', async () => {
         await client.initializeSession(serverPub, true);
-    }, 50);
+    });
 
     const ciphertext = await client.initializeSession(serverPub, true) as Uint8Array;
     await measurePerf('Session establishment (server decapsulate)', async () => {
         await server.initializeSession(clientPub, false);
         await server.finalizeSession(ciphertext);
-    }, 50);
+    });
 
     // Encrypt
     let encrypted : Uint8Array, decrypted : Uint8Array;
     await measurePerf('Encryption (client)', async () => {
         encrypted = await client.encrypt(plain1KB);
-    }, 1);
+    });
     await measurePerf('Decryption (server)', async () => {
         decrypted = await server.decrypt(encrypted);
-    }, 1)
+    })
 
     // Compare with AES
     if (typeof require !== 'undefined') {
