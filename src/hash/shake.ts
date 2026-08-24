@@ -4,26 +4,25 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1005
+ * @build           1007
  * @website         https://dev.to/devsdaddy
- * @updated         14.04.2026
+ * @updated         24.08.2026
  */
 /* Import required modules */
-import { loadWasmModule } from "../core/wasm_loader";
+import {loadWasmModule} from "../core/wasm_loader";
 
 // Shake256 Constants
 const KECCAK_ROUNDS = 24;
 const RATE_BYTES = 136;
 const RHO: number[] = [
-    0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14
+    0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18,
+    2, 61, 56, 14,
 ];
 const RC: number[] = [
-    0x00000001, 0x00008082, 0x8000808a, 0x80008000,
-    0x0000808b, 0x80000001, 0x80008081, 0x00008009,
-    0x0000008a, 0x00000088, 0x80008009, 0x8000000a,
-    0x8000808b, 0x0000008b, 0x80008089, 0x80008003,
-    0x80008002, 0x00000080, 0x0000800a, 0x8000000a,
-    0x80008081, 0x00008080, 0x80000001, 0x80008008
+    0x00000001, 0x00008082, 0x8000808a, 0x80008000, 0x0000808b, 0x80000001,
+    0x80008081, 0x00008009, 0x0000008a, 0x00000088, 0x80008009, 0x8000000a,
+    0x8000808b, 0x0000008b, 0x80008089, 0x80008003, 0x80008002, 0x00000080,
+    0x0000800a, 0x8000000a, 0x80008081, 0x00008080, 0x80000001, 0x80008008,
 ];
 
 /**
@@ -34,7 +33,14 @@ export class Shake256Wasm {
     public static initializedWasm = false;
     private static instance: WebAssembly.Instance | null = null;
     private static memory: WebAssembly.Memory | null = null;
-    private static shake256Func: ((inputPtr: number, inputLen: number, outputPtr: number, outputLen: number) => void) | null = null;
+    private static shake256Func:
+        | ((
+        inputPtr: number,
+        inputLen: number,
+        outputPtr: number,
+        outputLen: number,
+    ) => void)
+        | null = null;
     private static nextPtr: number = 0;
 
     /**
@@ -53,15 +59,15 @@ export class Shake256Wasm {
      * @param wasmUrl {string} Path to module
      */
     public static async initWasm(wasmUrl: string): Promise<void> {
-        try{
-            if(this.initializedWasm) return Promise.resolve();
+        try {
+            if (this.initializedWasm) return Promise.resolve();
 
             // Initialize Module
             const module = await loadWasmModule(wasmUrl);
             const imports = {
                 env: {
-                    memory: new WebAssembly.Memory({ initial: 256, maximum: 512 }),
-                }
+                    memory: new WebAssembly.Memory({initial: 256, maximum: 512}),
+                },
             };
 
             this.instance = await WebAssembly.instantiate(module, imports);
@@ -70,7 +76,7 @@ export class Shake256Wasm {
             this.memory = imports.env.memory;
             this.nextPtr = 0;
             this.initializedWasm = true;
-        }catch(e){
+        } catch (e) {
             console.error(`WASM module initialization error. Switched to fallback.`);
             this.initializedWasm = false;
         }
@@ -83,8 +89,9 @@ export class Shake256Wasm {
      * @returns {Uint8Array} Output buffer
      */
     public static shake256Wasm(input: Uint8Array, outputLen: number): Uint8Array {
-        try{
-            if (!this.shake256Func || !this.memory) throw new Error('WASM not initialized. Call initWasm() first.');
+        try {
+            if (!this.shake256Func || !this.memory)
+                throw new Error("WASM not initialized. Call initWasm() first.");
             const mem = new Uint8Array(this.memory.buffer);
             const inputPtr = this.alloc(input.length);
             const outputPtr = this.alloc(outputLen);
@@ -93,9 +100,11 @@ export class Shake256Wasm {
             const output = new Uint8Array(outputLen);
             output.set(mem.slice(outputPtr, outputPtr + outputLen));
             return output;
-        }catch (e){
+        } catch (e) {
             // Not supported - fallback to JS
-            console.log("WASM Shake is not supported on this platform. Switched to fallback.")
+            console.log(
+                "WASM Shake is not supported on this platform. Switched to fallback.",
+            );
             this.initializedWasm = false;
             return Shake256.hashSync(input, outputLen);
         }
@@ -133,9 +142,9 @@ export class KeccakState {
         const lane = index >> 3;
         const shift = (index & 7) << 3;
         if (shift < 32) {
-            this.stateLow[lane] ^= (byte << shift);
+            this.stateLow[lane] ^= byte << shift;
         } else {
-            this.stateHigh[lane] ^= (byte << (shift - 32));
+            this.stateHigh[lane] ^= byte << (shift - 32);
         }
     }
 
@@ -152,7 +161,7 @@ export class KeccakState {
         } else {
             word = this.stateHigh[lane];
         }
-        return (word >>> shift) & 0xFF;
+        return (word >>> shift) & 0xff;
     }
 
     /**
@@ -170,7 +179,7 @@ export class KeccakState {
                 let l = stateLow[x];
                 let h = stateHigh[x];
                 for (let y = 1; y < 5; y++) {
-                    const idx = x + y*5;
+                    const idx = x + y * 5;
                     l ^= stateLow[idx];
                     h ^= stateHigh[idx];
                 }
@@ -180,8 +189,8 @@ export class KeccakState {
             const D0 = new Array(5);
             const D1 = new Array(5);
             for (let x = 0; x < 5; x++) {
-                const prev = (x+4)%5;
-                const next = (x+1)%5;
+                const prev = (x + 4) % 5;
+                const next = (x + 1) % 5;
                 // rot(C[next], 1)
                 let rotL = C0[next];
                 let rotH = C1[next];
@@ -197,18 +206,20 @@ export class KeccakState {
                 stateHigh[i] ^= D1[x];
             }
 
-            let x = 1, y = 0;
+            let x = 1,
+                y = 0;
             let curL = stateLow[1];
             let curH = stateHigh[1];
             for (let t = 0; t < 24; t++) {
                 const nx = y;
-                const ny = (2*x + 3*y) % 5;
-                const idx = nx + ny*5;
+                const ny = (2 * x + 3 * y) % 5;
+                const idx = nx + ny * 5;
                 const nextL = stateLow[idx];
                 const nextH = stateHigh[idx];
-                const r = RHO[t+1];
+                const r = RHO[t + 1];
                 // rot(cur, r)
-                let rotL = curL, rotH = curH;
+                let rotL = curL,
+                    rotH = curH;
                 if (r >= 32) {
                     const r2 = r - 32;
                     const tL = (rotL >>> r2) | (rotH << (32 - r2));
@@ -230,33 +241,33 @@ export class KeccakState {
             }
 
             for (let y = 0; y < 5; y++) {
-                const base = y*5;
+                const base = y * 5;
                 const rowL0 = stateLow[base];
                 const rowH0 = stateHigh[base];
-                const rowL1 = stateLow[base+1];
-                const rowH1 = stateHigh[base+1];
-                const rowL2 = stateLow[base+2];
-                const rowH2 = stateHigh[base+2];
-                const rowL3 = stateLow[base+3];
-                const rowH3 = stateHigh[base+3];
-                const rowL4 = stateLow[base+4];
-                const rowH4 = stateHigh[base+4];
+                const rowL1 = stateLow[base + 1];
+                const rowH1 = stateHigh[base + 1];
+                const rowL2 = stateLow[base + 2];
+                const rowH2 = stateHigh[base + 2];
+                const rowL3 = stateLow[base + 3];
+                const rowH3 = stateHigh[base + 3];
+                const rowL4 = stateLow[base + 4];
+                const rowH4 = stateHigh[base + 4];
                 // new0 = row0 ^ ((~row1) & row2)
-                stateLow[base]   = rowL0 ^ ((~rowL1) & rowL2);
-                stateHigh[base]  = rowH0 ^ ((~rowH1) & rowH2);
-                stateLow[base+1] = rowL1 ^ ((~rowL2) & rowL3);
-                stateHigh[base+1]= rowH1 ^ ((~rowH2) & rowH3);
-                stateLow[base+2] = rowL2 ^ ((~rowL3) & rowL4);
-                stateHigh[base+2]= rowH2 ^ ((~rowH3) & rowH4);
-                stateLow[base+3] = rowL3 ^ ((~rowL4) & rowL0);
-                stateHigh[base+3]= rowH3 ^ ((~rowH4) & rowH0);
-                stateLow[base+4] = rowL4 ^ ((~rowL0) & rowL1);
-                stateHigh[base+4]= rowH4 ^ ((~rowH0) & rowH1);
+                stateLow[base] = rowL0 ^ (~rowL1 & rowL2);
+                stateHigh[base] = rowH0 ^ (~rowH1 & rowH2);
+                stateLow[base + 1] = rowL1 ^ (~rowL2 & rowL3);
+                stateHigh[base + 1] = rowH1 ^ (~rowH2 & rowH3);
+                stateLow[base + 2] = rowL2 ^ (~rowL3 & rowL4);
+                stateHigh[base + 2] = rowH2 ^ (~rowH3 & rowH4);
+                stateLow[base + 3] = rowL3 ^ (~rowL4 & rowL0);
+                stateHigh[base + 3] = rowH3 ^ (~rowH4 & rowH0);
+                stateLow[base + 4] = rowL4 ^ (~rowL0 & rowL1);
+                stateHigh[base + 4] = rowH4 ^ (~rowH0 & rowH1);
             }
 
             // Iota step
-            stateLow[0] ^= RC[round] & 0xFFFFFFFF;
-            stateHigh[0] ^= (RC[round] >>> 0) & 0xFFFFFFFF;
+            stateLow[0] ^= RC[round] & 0xffffffff;
+            stateHigh[0] ^= (RC[round] >>> 0) & 0xffffffff;
         }
     }
 }
@@ -271,7 +282,10 @@ export class Shake256 {
      * @param outputLength {number} Output buffer length
      * @returns {Uint8Array} Output buffer
      */
-    public static async hash(input: Uint8Array, outputLength: number): Promise<Uint8Array> {
+    public static async hash(
+        input: Uint8Array,
+        outputLength: number,
+    ): Promise<Uint8Array> {
         return this.process(input, outputLength);
     }
 
@@ -305,7 +319,7 @@ export class Shake256 {
             offset += blockSize;
             if (blockSize === RATE_BYTES || offset === inputLen) {
                 if (offset === inputLen) {
-                    state.absorbByte(0x1F, blockSize);
+                    state.absorbByte(0x1f, blockSize);
                     state.absorbByte(0x80, blockSize + 1);
                 }
                 state.permute();

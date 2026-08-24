@@ -4,15 +4,16 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1001
+ * @build           1003
  * @website         https://dev.to/devsdaddy
- * @updated         13.04.2026
+ * @updated         24.08.2026
  */
 /**
  * Crypto methods async interface
  */
 export interface ICryptoMethodAsync {
     encrypt(decryptedData: Uint8Array): Promise<Uint8Array>;
+
     decrypt(encryptedData: Uint8Array): Promise<Uint8Array>;
 }
 
@@ -21,20 +22,33 @@ export interface ICryptoMethodAsync {
  */
 export interface ICryptoMethodSync {
     encryptSync(decryptedData: Uint8Array): Uint8Array;
+
     decryptSync(encryptedData: Uint8Array): Uint8Array;
 }
 
 /**
  * Cipher interface
  */
-export interface ICipher extends ICryptoMethodAsync, ICryptoMethodSync{}
+export interface ICipher extends ICryptoMethodAsync, ICryptoMethodSync {
+}
 
 /**
  * KDF interface
  */
 export interface IKDF {
-    derive(ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, length: number): Promise<Uint8Array>;
-    deriveSync(ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, length: number): Uint8Array;
+    derive(
+        ikm: Uint8Array,
+        salt: Uint8Array,
+        info: Uint8Array,
+        length: number,
+    ): Promise<Uint8Array>;
+
+    deriveSync(
+        ikm: Uint8Array,
+        salt: Uint8Array,
+        info: Uint8Array,
+        length: number,
+    ): Uint8Array;
 }
 
 /**
@@ -42,10 +56,22 @@ export interface IKDF {
  */
 export interface IMAC {
     sign(data: Uint8Array, key: Uint8Array): Promise<Uint8Array>;
-    signTwo(data1: Uint8Array, data2: Uint8Array, key: Uint8Array): Promise<Uint8Array>; // новая
+
+    signTwo(
+        data1: Uint8Array,
+        data2: Uint8Array,
+        key: Uint8Array,
+    ): Promise<Uint8Array>; // новая
     verify(data: Uint8Array, key: Uint8Array, tag: Uint8Array): Promise<boolean>;
+
     signSync(data: Uint8Array, key: Uint8Array): Uint8Array;
-    signTwoSync(data1: Uint8Array, data2: Uint8Array, key: Uint8Array): Uint8Array;
+
+    signTwoSync(
+        data1: Uint8Array,
+        data2: Uint8Array,
+        key: Uint8Array,
+    ): Uint8Array;
+
     verifySync(data: Uint8Array, key: Uint8Array, tag: Uint8Array): boolean;
 }
 
@@ -54,19 +80,32 @@ export interface IMAC {
  */
 export interface IKeyExchange {
     generateKeyPair(): Promise<ICryptoKeyPair>;
+
     generateKeyPairSync(): ICryptoKeyPair;
+
     encapsulate(publicKey: Uint8Array): Promise<ICryptoEncapsulated>;
+
     encapsulateSync(publicKey: Uint8Array): ICryptoEncapsulated;
-    decapsulate(privateKey: Uint8Array, peerPublicKey: Uint8Array, ciphertext: Uint8Array): Promise<Uint8Array>;
-    decapsulateSync(privateKey: Uint8Array, peerPublicKey: Uint8Array, ciphertext: Uint8Array): Uint8Array;
+
+    decapsulate(
+        privateKey: Uint8Array,
+        peerPublicKey: Uint8Array,
+        ciphertext: Uint8Array,
+    ): Promise<Uint8Array>;
+
+    decapsulateSync(
+        privateKey: Uint8Array,
+        peerPublicKey: Uint8Array,
+        ciphertext: Uint8Array,
+    ): Uint8Array;
 }
 
 /**
  * Crypto key pair
  */
 export interface ICryptoKeyPair {
-    publicKey : Uint8Array;
-    privateKey : Uint8Array;
+    publicKey: Uint8Array;
+    privateKey: Uint8Array;
 }
 
 /**

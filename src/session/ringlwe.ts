@@ -4,14 +4,14 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1003
+ * @build           1005
  * @website         https://dev.to/devsdaddy
- * @updated         13.04.2026
+ * @updated         24.08.2026
  */
 /* Import Required Modules */
-import {ICryptoEncapsulated, ICryptoKeyPair, IKeyExchange} from "../core/types";
-import {QuarkDashUtils} from "../core/utils";
-import {SHA256} from "../hash/sha";
+import {
+    IKeyExchange,
+} from "../core/types";
 import {BaseRingLWE} from "./baselwe";
 
 /**
