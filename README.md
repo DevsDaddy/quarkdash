@@ -9,7 +9,7 @@
 
 ---
 
-[About](#about-quarkdash-crypto) | [Get Started](#get-started) | [Example](#basic-example) | [Benchmark](#benchmark) | [Docs](https://github.com/devsdaddy/quarkdash/wiki) | [Scheme](https://app.holst.so/share/b/7ae942f8-8a40-42c9-9991-3b624f147da8)
+[Paper](whitepaper.pdf) | [About](#about-quarkdash-crypto) | [Get Started](#get-started) | [Example](#basic-example) | [Benchmark](#benchmark) | [Docs](https://github.com/devsdaddy/quarkdash/wiki) | [Scheme](https://app.holst.so/share/b/7ae942f8-8a40-42c9-9991-3b624f147da8)
 
 ---
 
@@ -18,6 +18,8 @@
 This library can be used as shared solution for client and server. Written on **pure typescript**. **Dependency-free**.
 
 > Algorithm Scheme [can be found here](https://app.holst.so/share/b/7ae942f8-8a40-42c9-9991-3b624f147da8)
+
+**[Read full paper](whitepaper.pdf)**
 
 ### ❓ Why QuarkDash Crypto?<br/>
 🔹 **Lightweight library** with zero dependencies;<br/>
