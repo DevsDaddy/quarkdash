@@ -2,11 +2,11 @@
  * QuarkDash Crypto Library
  *
  * @git             https://github.com/devsdaddy/quarkdash
- * @version         1.2.0
+ * @version         1.2.1
  * @author          Elijah Rastorguev
- * @build           1024
+ * @build           1030
  * @website         https://dev.to/devsdaddy
- * @updated         24.08.2026
+ * @updated         28.08.2026
  */
 /* Export Types and Utils */
 export * from "./core/types";

@@ -4,9 +4,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1003
+ * @build           1009
  * @website         https://dev.to/devsdaddy
- * @updated         24.08.2026
+ * @updated         28.08.2026
  */
 /**
  * SHA-256 Implementation
@@ -62,14 +62,15 @@ export class SHA256 {
 
         // Pre-processing: padding
         const ml = msgBytes.length * 8;
-        const padded = new Uint8Array(((ml + 64 + 511) & ~511) / 8);
+        const paddedLen = ((msgBytes.length + 9 + 63) & ~63);
+        const padded = new Uint8Array(paddedLen);
         padded.set(msgBytes);
         padded[msgBytes.length] = 0x80;
 
         // Append length
         const dv = new DataView(padded.buffer);
-        dv.setUint32(padded.length - 8, 0, false);
-        dv.setUint32(padded.length - 4, ml, false);
+        dv.setUint32(paddedLen - 8, Math.floor(ml / 0x100000000), false);
+        dv.setUint32(paddedLen - 4, ml >>> 0, false);
 
         // Process chunks
         for (let i = 0; i < padded.length; i += 64) {
@@ -280,12 +281,14 @@ export class SHA512 {
         let h7 = 0x5be0cd19137e2179n;
 
         const ml = BigInt(msgBytes.length * 8);
-        const padded = new Uint8Array(((Number(ml) + 128 + 1023) & ~1023) / 8);
+        const paddedLen = ((msgBytes.length + 17 + 127) & ~127);
+        const padded = new Uint8Array(paddedLen);
         padded.set(msgBytes);
         padded[msgBytes.length] = 0x80;
 
         const dv = new DataView(padded.buffer);
-        dv.setBigUint64(padded.length - 8, ml, false);
+        dv.setBigUint64(paddedLen - 16, 0n, false);
+        dv.setBigUint64(paddedLen - 8, ml, false);
 
         for (let i = 0; i < padded.length; i += 128) {
             const w = new Array(80).fill(0n);

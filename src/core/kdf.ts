@@ -1,29 +1,27 @@
 /**
- * QuarkDash Shake256 Based KDF
+ * QuarkDash KDF Implementation
  *
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1003
+ * @build           1009
  * @website         https://dev.to/devsdaddy
- * @updated         24.08.2026
+ * @updated         28.08.2026
  */
-/* Import Required Modules */
+/* Import required modules */
 import type {IKDF} from "./types";
 import {QuarkDashUtils} from "./utils";
 
 /**
- * KDF implementation using Shake-256
+ * QuarkDash KDF
  */
 export class QuarkDashKDF implements IKDF {
     /**
-     * Derive KDF async
-     * @param ikm {Uint8Array} IKM buffer
-     * @param salt {Uint8Array} Salt buffer
-     * @param info {Uint8Array} Meta buffer
-     * @param length {number} Buffer length
-     * @returns {Promise<Uint8Array>} Result
-     * TODO: GPU Calculations
+     * Derive KDF
+     * @param ikm {Uint8Array} IKM
+     * @param salt {Uint8Array} Salt
+     * @param info {Uint8Array} Information
+     * @param length {number} Length
      */
     public async derive(
         ikm: Uint8Array,
@@ -37,8 +35,9 @@ export class QuarkDashKDF implements IKDF {
         )) as Uint8Array;
         const result = new Uint8Array(length);
         let t = new Uint8Array(0) as Uint8Array;
+        let pos = 0;
         let i = 1;
-        while (result.length < length) {
+        while (pos < length) {
             const input = QuarkDashUtils.concatBytes(
                 t,
                 info,
@@ -48,20 +47,20 @@ export class QuarkDashKDF implements IKDF {
                 QuarkDashUtils.concatBytes(prk, input),
                 64,
             );
-            const take = Math.min(t.length, length - result.length);
-            result.set(t.slice(0, take), result.length);
+            const take = Math.min(t.length, length - pos);
+            result.set(t.slice(0, take), pos);
+            pos += take;
             i++;
         }
         return result;
     }
 
     /**
-     * Derive KDF sync
-     * @param ikm {Uint8Array} IKM buffer
-     * @param salt {Uint8Array} Salt buffer
-     * @param info {Uint8Array} Meta buffer
-     * @param length {number} Buffer length
-     * @returns {Uint8Array} Result
+     * Derive in sync mode
+     * @param ikm {Uint8Array} IKM
+     * @param salt {Uint8Array} Salt
+     * @param info {Uint8Array} Information
+     * @param length {number} Length
      */
     public deriveSync(
         ikm: Uint8Array,
@@ -75,15 +74,17 @@ export class QuarkDashKDF implements IKDF {
         );
         const result = new Uint8Array(length);
         let t = new Uint8Array(0) as Uint8Array;
+        let pos = 0;
         let i = 1;
-        while (result.length < length) {
+        while (pos < length) {
             const input = QuarkDashUtils.concatBytes(t, info, new Uint8Array([i]));
             t = QuarkDashUtils.shake256Sync(
                 QuarkDashUtils.concatBytes(prk, input),
                 64,
             );
-            const take = Math.min(t.length, length - result.length);
-            result.set(t.slice(0, take), result.length);
+            const take = Math.min(t.length, length - pos);
+            result.set(t.slice(0, take), pos);
+            pos += take;
             i++;
         }
         return result;

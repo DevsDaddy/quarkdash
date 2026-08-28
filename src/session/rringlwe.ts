@@ -4,9 +4,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1004
+ * @build           1010
  * @website         https://dev.to/devsdaddy
- * @updated         24.08.2026
+ * @updated         28.08.2026
  */
 /* Import required modules */
 import {
@@ -25,6 +25,6 @@ export class QuarkDashRRLWE extends BaseRingLWE implements IKeyExchange {
     // RRLWE Constants
     protected override readonly N = 256;
     protected override readonly Q = 12289n;
-    protected override readonly ROOT = 7n;
+    protected override readonly ROOT = 8340n;
     protected override readonly INV_N = this.modInverse(BigInt(this.N), this.Q);
 }

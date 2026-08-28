@@ -1,4 +1,5 @@
 # Welcome to QuarkDash 🔒 Repository
+### Current version: 1.2.1 LTS (August 2026)
 ![QuarkDash Crypto Protocol](img/cover.png)
 
 **QuarkDash** -  pure typescript it is a hybrid cryptographic protocol that provides post-quantum security, high performance, and attack resistance.
@@ -28,10 +29,11 @@ This library can be used as shared solution for client and server. Written on **
 🔹 **Production ready** with benchmarks;
 
 ### 🔒 General Components
-- **Asymmetric key exchange**: Ring-LWE (N=256, Q=7681) / R-Ring-LWE (Q=12289) based on hardened NTT;
+- **Asymmetric key exchange**: Ring-LWE (N=256, Q=7681, ROOT=5685) / R-Ring-LWE (Q=12289, ROOT=8340) with hardened NTT + 1-bit per-coeff reconciliation hint (ciphertext 544 B, backward-compatible with 512 B);
 - **Symmetric encryption**: ChaCha20 (RFC 7539) or lightweight Gimli with **lazy keystream generation**;
-- **Key Derivation Function (KDF)**: SHAKE256 + HKDF-style re-key derivation;
-- **Message Authentication Code (MAC)**: SHAKE256 with key;
+- **Key Derivation Function (KDF)**: SHAKE256 + HKDF-style expand (fixed, loop bug fixed, deterministic zero-salt for session);
+- **Message Authentication Code (MAC)**: SHAKE256(key‖data) 32 B, constant-time verify, `signTwo` zero-copy;
+- **Hash**: SHA-256 / SHA-512 (padding & length fixed for 55/56 and 111/112 edge blocks) and SHAKE-256 (Keccak-f from `js-sha3`, correct domain separation `0x1F`/`0x80`, empty-input & multi-block squeeze, C/WASM synced);
 - **Replay protection**: timestamp + sequence number + sliding window;
 - **Passphrase KDF**: PBKDF2-HMAC-SHA256 / Argon2id-lite;
 - **Transports**: WebSocket / HTTP / gRPC integrations.
@@ -41,11 +43,11 @@ This library can be used as shared solution for client and server. Written on **
 - **Performance**: encryption up to 2.8 GB/s, session establishment ~10 ms;
 - **Forward secrecy**: compromising a long-term key does not reveal past sessions;
 - **Lazy keystream**: seekable, cached, zero-copy XOR via `ChaChaKeystream` / `GimliKeystream`;
-- **Re-keying (Key rotation)**: `rekey()` / `applyRekey()` with policy by bytes / messages / time limit;
+- **Re-keying (Key rotation)**: `rekey()` / `applyRekey()` with policy by bytes / messages / time limit (order fixed: encrypt-then-derive);
 - **Passphrase**: Human-readable `pbkdf2` / `argon2id` lite keys and `generateSalt()`;
-- **Hardened Secured NTT**: blinding, double-check, constant-time, polynome validation;
+- **Hardened Secured NTT**: blinding, double-check, constant-time, polynome validation, correct primitive roots, bit-reversed Cooley-Tukey and cross-rounding hint;
 - **Transports**: native simple wrappers for `WebSocket` / `gRPC` / `HTTP` transport;
-- **Flexibility** – ChaCha20/Gimli, sync and async API, per-message nonce.
+- **Flexibility** – ChaCha20/Gimli, sync and async API, per-message nonce;
 
 ---
 
@@ -265,15 +267,14 @@ Below I've outlined a brief step-by-step flowchart of how the algorithm works. I
 Below is a brief comparison table of popular encryption algorithm variations. As we know, each algorithm serves its own purpose, so this comparison is more of a synthetic test.
 
 | Characteristic                        | QuarkDash (ChaCha20) | QuarkDash (Gimli) | AES-256-GSM       | ECDH/P-256 + AES | RSA-2048 + AES |
-| ------------------------------------- | -------------------- | ----------------- | ----------------- | ---------------- | -------------- |
+|---------------------------------------|----------------------|-------------------|-------------------|------------------|----------------|
 | **Type**                              | Hybrid               | Hybrid            | Symmetric         | Asymmetric (KEX) | Hybrid         |
-| **Quantum stability**                 | ✅ Ring-LWE          | ✅ Ring-LWE       | ❌ No             | ❌ No            | ❌ No          |
-| **Encryption speed (1mb)**            | ~2.5 GB/s            | ~2.8 GB/s         | ~1.2 GB/s         | ~50 MB/s (ECIES) | ~10 MB/s       |
-| **Decryption speed (1mb)**            | ~2.5 GB/s            | ~2.8 GB/s         | ~1.2 GB/s         | ~50 MB/s         | ~1 MB/s        |
-| **Session speed**                     | ~10-15 ms            | ~10-15 ms         | 0 ms (pre-shared) | ~5 ms            | ~50 ms         |
-| **Key size**                          | ~2 KB                | ~2 KB             | N/A               | 33 bytes         | 256 bytes      |
-| **Forward secrecy**                   | ✅                   | ✅                | ❌                | ⚠️ optional      | ❌             |
-| **Out-of-box security**               | ✅                   | ✅                | ⚠️ Partial        | ⚠️ Partial       | ❌             |
+| **Quantum stability**                 | ✅ Ring-LWE           | ✅ Ring-LWE        | ❌ No              | ❌ No             | ❌ No           |
+| **Encryption speed (1mb)**            | up to 2.5 GB/s       | up to 2.8 GB/s    | ~1.2 GB/s         | ~50 MB/s (ECIES) | ~10 MB/s       |
+| **Decryption speed (1mb)**            | up to 2.5 GB/s       | up to 2.8 GB/s    | ~1.2 GB/s         | ~50 MB/s         | ~1 MB/s        |
+| **Session speed**                     | ~2 ms                | ~2 ms             | 0 ms (pre-shared) | ~5 ms            | ~50 ms         |
+| **Forward secrecy**                   | ✅                    | ✅                 | ❌                 | ⚠️ optional      | ❌              |
+| **Out-of-box security**               | ✅                    | ✅                 | ⚠️ Partial        | ⚠️ Partial       | ❌              |
 | **The Difficulty of Quantum Hacking** | 2^256                | 2^256             | 2^128 (Grover)    | 0 (Shor)         | 0 (Shor)       |
 
 > Full comparison can be found [in wiki](https://github.com/devsdaddy/quarkdash)
@@ -281,24 +282,27 @@ Below is a brief comparison table of popular encryption algorithm variations. As
 ---
 
 ## Benchmark
-Below I have described performance tests in comparison with other popular encryption algorithm combinations.
+Below I have described performance tests for QuarkDash Crypto Protocol.
 
 > **Please, note**. This benchmark is launched at Intel i5-12700H, 16GB RAM, Node.js 24
 
-| Operation                                 | QuarkDash (ChaCha20) | QuarkDash (Gimli) | AES-256-GSM | ECDH (P-256) + AES | RSA-2048 |
-|-------------------------------------------|----------------------|-------------------|-------------|--------------------|----------|
-| **Key generation**                        | 0.7ms                | 0.9ms             | N/A         | 1.2ms              | 48ms     |
-| **Session** (KEM)                         | 2.9ms                | 2.9ms             | N/A         | 3.4ms              | 42ms     |
-| **Encryption** (1KB)                      | 0.003ms              | 0.0028ms          | 0.005ms     | 0.05ms             | 0.8ms    |
-| **Decryption** (1KB)                      | 0.003ms              | 0.0028ms          | 0.005ms     | 0.05ms             | 0.1ms    |
-| **Encryption** (1MB)                      | 0.42ms               | 0.38ms            | 0.85ms      | 21ms               | 102ms    |
-| **Decryption** (1MB)                      | 0.42ms               | 0.38ms            | 0.85ms      | 21ms               | 1080ms   |
-| **Encryption (per-message nonce) (1KB)**  | 0.5ms                | 1ms               | -           | -                  | -        |
-| **Encryption (per-message nonce) (64KB)** | 5.5ms                | 5.32ms            | -           | -                  | -        |
-| **Encryption (per-message nonce) (1MB)**  | 81ms                 | 67.5ms            | -           | -                  | -        |
-| **Decryption (per-message nonce) (1KB)**  | 0.29ms               | 0.46ms            | -           | -                  | -        |
-| **Decryption (per-message nonce) (64KB)** | 5.95ms               | 4.16ms            | -           | -                  | -        |
-| **Decryption (per-message nonce) (1MB)**  | 80ms                 | 64.1ms            | -           | -                  | -        |
+
+| Operation                                                     | QuarkDash (ChaCha20) | QuarkDash (Gimli) |
+|---------------------------------------------------------------|----------------------|-------------------|
+| **Key generation**                                            | 0.6ms                | 0.7ms             |
+| **Session (Handshake)** (KEM)                                 | 2ms                  | 1.95ms            |
+| **Full Encryption with handshake** (1KB)                      | 0.4ms                | 0.18ms            |
+| **Full Decryption with handshake** (1KB)                      | 0.58ms               | 0.1ms             |
+| **Full Encryption with handshake** (1MB)                      | 32ms                 | 38ms              |
+| **Full Decryption with handshake** (1MB)                      | 26ms                 | 37ms              |
+| **Full Encryption with handshake (per-message nonce) (1KB)**  | 1.05ms               | 1.55ms            |
+| **Full Encryption with handshake (per-message nonce) (64KB)** | 7.5ms                | 3.32ms            |
+| **Full Encryption with handshake (per-message nonce) (1MB)**  | 35ms                 | 30ms              |
+| **Full Decryption with handshake (per-message nonce) (1KB)**  | 0.35ms               | 1.28ms            |
+| **Full Decryption with handshake (per-message nonce) (64KB)** | 2.23ms               | 3.75ms            |
+| **Full Decryption with handshake (per-message nonce) (1MB)**  | 26ms                 | 35ms              |
+| **Keystream** (2MB XOR)                                       | 26ms                 | 26ms              |
+| **Key rotation**                                              | 0.07ms               | 0.07ms            |
 
 You can run benchmark on your machine using `npm run bench`
 

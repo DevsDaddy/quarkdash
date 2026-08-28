@@ -8,9 +8,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1024
+ * @build           1028
  * @website         https://dev.to/devsdaddy
- * @updated         24.08.2026
+ * @updated         28.08.2026
  */
 /* Import required modules */
 import {IMAC} from "./types";
@@ -37,20 +37,24 @@ export class QuarkDashMAC implements IMAC {
      * @param key {Uint8Array} Key
      */
     public async sign(data: Uint8Array, key: Uint8Array): Promise<Uint8Array> {
-        const full = QuarkDashUtils.concatBytes(key, data);
-        return isWasmShake()
-            ? Shake256Wasm.shake256Wasm(full, 32)
-            : Shake256.hash(full, 32);
+        if (isWasmShake()) {
+            const full = QuarkDashUtils.concatBytes(key, data);
+            return Shake256Wasm.shake256Wasm(full, 32);
+        }
+        return Shake256.hashMulti([key, data], 32);
     }
 
     /**
-     * Sign with 32B tag in sync mode
+     * Sing with 32B tag in sync mode
      * @param data {Uint8Array} Data buffer
      * @param key {Uint8Array} Key
      */
     public signSync(data: Uint8Array, key: Uint8Array): Uint8Array {
-        const full = QuarkDashUtils.concatBytes(key, data);
-        return QuarkDashUtils.shake256Sync(full, 32);
+        if (isWasmShake()) {
+            const full = QuarkDashUtils.concatBytes(key, data);
+            return Shake256Wasm.shake256Wasm(full, 32);
+        }
+        return Shake256.hashMultiSync([key, data], 32);
     }
 
     /**
@@ -94,17 +98,16 @@ export class QuarkDashMAC implements IMAC {
         data2: Uint8Array,
         key: Uint8Array,
     ): Promise<Uint8Array> {
-        const totalLen = key.length + data1.length + data2.length;
-        if (totalLen > this.tempBuffer.length)
-            this.tempBuffer = new Uint8Array(totalLen);
-
-        this.tempBuffer.set(key, 0);
-        this.tempBuffer.set(data1, key.length);
-        this.tempBuffer.set(data2, key.length + data1.length);
-
-        return isWasmShake()
-            ? Shake256Wasm.shake256Wasm(this.tempBuffer.subarray(0, totalLen), 32)
-            : Shake256.hash(this.tempBuffer.subarray(0, totalLen), 32);
+        if (isWasmShake()) {
+            const totalLen = key.length + data1.length + data2.length;
+            if (totalLen > this.tempBuffer.length)
+                this.tempBuffer = new Uint8Array(totalLen);
+            this.tempBuffer.set(key, 0);
+            this.tempBuffer.set(data1, key.length);
+            this.tempBuffer.set(data2, key.length + data1.length);
+            return Shake256Wasm.shake256Wasm(this.tempBuffer.subarray(0, totalLen), 32);
+        }
+        return Shake256.hashMulti([key, data1, data2], 32);
     }
 
     /**
@@ -118,13 +121,14 @@ export class QuarkDashMAC implements IMAC {
         data2: Uint8Array,
         key: Uint8Array,
     ): Uint8Array {
-        const totalLen = key.length + data1.length + data2.length;
-        const combined = new Uint8Array(totalLen);
-        combined.set(key, 0);
-        combined.set(data1, key.length);
-        combined.set(data2, key.length + data1.length);
-        return isWasmShake()
-            ? Shake256Wasm.shake256Wasm(combined, 32)
-            : Shake256.hashSync(combined, 32);
+        if (isWasmShake()) {
+            const totalLen = key.length + data1.length + data2.length;
+            const combined = new Uint8Array(totalLen);
+            combined.set(key, 0);
+            combined.set(data1, key.length);
+            combined.set(data2, key.length + data1.length);
+            return Shake256Wasm.shake256Wasm(combined, 32);
+        }
+        return Shake256.hashMultiSync([key, data1, data2], 32);
     }
 }

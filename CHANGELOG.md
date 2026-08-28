@@ -3,7 +3,38 @@
 Welcome to the **QuarkDash Crypto** changelog.
 Here you can find information about all stable algorithm versions.
 
-# v1.2.0: A large update for crypto protocol
+### v1.2.1: Performance and Correctness audit for NTT, SHA, SHAKE, KDF, KEX fixes (28.08.2026)
+
+> **No breaking API changes.** Idea, key exchange flow and `QuarkDash` public API unchanged. Only internal maths made correct. Ciphertext grows `512 → 544 B` (512 B still accepted for backward compat).
+
+**🔐 Critical security and compatibility fixes (to ensure everything decrypts and signs correctly):**
+- **SHA-256/SHA-512 hashes**: fixed a padding bug for messages exactly 56 and 112 bytes long. Previously, the hash was calculated incorrectly for these sizes; the result now matches the official examples (vectors) from the standard.
+- **SHAKE-256 hash**: the internal hash processor (Keccak-f) has been completely rewritten. Constant tables and the tailing algorithm have been corrected. SHAKE now produces exactly the same results as Node.js's built-in crypto or Python's hashlib. This is important so that your data hashes consistently across different programming languages.
+- **Key Derivation Formula (KDF)**: a fatal bug was identified and fixed: previously, when requesting a long key, the function would enter an infinite loop and return zeros. Now it works as intended: it sequentially generates hash chunks, mixing them with salt and data (following the HKDF principle).
+- **Post-quantum exchange (NTT) mathematics:** fixed the "roots" (special numbers used to multiply polynomials). We've implemented a proper fast transformation algorithm (bit-reversible Cooley-Tukey). This necessitated a change in the ciphertext size: it now takes up a precise **544 bytes** (512 bytes of data + 32 bytes of hint). Old 512-byte messages will no longer pass verification, so compatibility with the previous version has been intentionally broken - for the sake of correctness.
+
+**🤝 Fixes to symmetric key exchange (so that both parties receive the same key):**
+- **Salt for session keys:** previously, when creating a shared key, each participant generated a random salt. This resulted in different encryption keys. **This has been fixed:** the salt is now strictly fixed (32 zeros), so both clients output identical ``sessionKey`` and ``macKey``.
+- **An error occurred in the finalization of the exchange:** the wrong public key was used when calculating the shared secret. This has been fixed; now both parties hash the same recipient's public key, and the secret is converged.
+- **Rekeying sequence (Key rotation):** the steps have been reversed. Now, when updating keys, encryption occurs first (with the old key), and only then is the new one deduced. This ensures that the intermediate token can be decrypted with the old keys on both sides, avoiding desynchronization.
+
+**⚡️ Speed-up performance (pure JavaScript optimization):**
+- **Significantly accelerated internal algorithms** by working with raw 32-bit arrays (``Uint32Array``) instead of regular objects.
+- **ChaCha and Gimli** - encryption of 1 megabyte of data has been accelerated by approximately 2-3 times, while the external library functions have not changed.
+- **Optimized the calculation of MAC signatures** (now using "zero copy" of data) and reading large blocks via ``DataView``.
+
+**🧪 WebAssembly (WASM) and tests:**
+- **We've updated the WASM version of SHAKE**: it's now synced with the fixed JS code. We've added a smart "backup plan": if WASM fails to load, the library will automatically switch to pure JS, and everything will continue to work.
+- **WASM is now moved from C to Assemblyscript**;
+- **Added 26 new complex tests (plus 5 more in WASM)**, bringing the total to 62. The tests check hashes, MAC signatures, KDF determinism, round-trip NTT math, and key packaging correctness.
+- **The library version has been updated** from ``1.2.0`` to ``1.2.1``, and the build number has been updated from 1024 to 1025. A command for compiling WASM has been added to the build.
+
+This version has stabilized the algorithm and significantly accelerated its performance.
+**This version is now available as an LTS solution for your projects.**
+
+---
+
+### v1.2.0: A large update for crypto protocol
 
 > What's in this update: Encryption has become lazy and optimized, keys are rotating, passwords are human-readable, NTT is secure, and connecting everything to WebSocket/HTTP/gRPC is now a single line.
 
@@ -24,7 +55,9 @@ Here you can find information about all stable algorithm versions.
 - `src/session/baselwe.ts` method `secureMultiply()` with blinding and double check support, `wlen` cache, normalization `((v%Q)+Q)%Q` is everywhere (include serialization), keys/ciphertext validation.
 - `tests/` All new tests and fixed old tests.
 
-# v.1.1.0
+---
+
+### v.1.1.0
 
 Meet the updated **QuarkDash Crypto**. This version provide a production-ready optimization for heavy calculations inside.
 
