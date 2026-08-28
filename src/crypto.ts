@@ -4,9 +4,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1024
+ * @build           1030
  * @website         https://dev.to/devsdaddy
- * @updated         24.08.2026
+ * @updated         28.08.2026
  */
 /* Import required modules */
 import {CipherFactory, CipherType} from "./cipher/cipher";
@@ -198,7 +198,7 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
             throw new Error("Session not initialized");
         const sharedSecret = await this.config.keyExchange.decapsulate(
             this.myKeyPair.privateKey,
-            this.peerPublicKey,
+            this.myKeyPair.publicKey,
             ciphertext,
         );
         await this.deriveSessionKeys(sharedSecret);
@@ -213,7 +213,7 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
             throw new Error("Session not initialized");
         const sharedSecret = this.config.keyExchange.decapsulateSync(
             this.myKeyPair.privateKey,
-            this.peerPublicKey,
+            this.myKeyPair.publicKey,
             ciphertext,
         );
         this.deriveSessionKeysSync(sharedSecret);
@@ -277,8 +277,9 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
     public async rekey(): Promise<Uint8Array> {
         const salt = QuarkDashUtils.randomBytes(32);
         const payload = buildRekeyPayload(salt, this.rekeyCounter);
+        const token = await this.encrypt(payload);
         await this.doRekeyDerive(salt);
-        return this.encrypt(payload); // encrypt with same key, peer decrypts and apply new key
+        return token;
     }
 
     /**
@@ -287,8 +288,9 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
     public rekeySync(): Uint8Array {
         const salt = QuarkDashUtils.randomBytes(32);
         const payload = buildRekeyPayload(salt, this.rekeyCounter);
+        const token = this.encryptSync(payload);
         this.doRekeyDeriveSync(salt);
-        return this.encryptSync(payload);
+        return token;
     }
 
     /**
@@ -416,9 +418,8 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
         this.receivedPackets.clear();
     }
 
-    // Derive session keys
     private async deriveSessionKeys(sharedSecret: Uint8Array): Promise<void> {
-        const salt = QuarkDashUtils.randomBytes(32);
+        const salt = new Uint8Array(32);
         const info = QuarkDashUtils.textToBytes("session-key");
         const keyMaterial = await this.config.kdf.derive(
             sharedSecret,
@@ -429,9 +430,8 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
         this.processDeriveSessionKeys(keyMaterial, sharedSecret);
     }
 
-    // Derive session keys in sync mode
     private deriveSessionKeysSync(sharedSecret: Uint8Array): void {
-        const salt = QuarkDashUtils.randomBytes(32);
+        const salt = new Uint8Array(32);
         const info = QuarkDashUtils.textToBytes("session-key");
         const keyMaterial = this.config.kdf.deriveSync(
             sharedSecret,
@@ -504,7 +504,7 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
         this.reinitSession(mat);
     }
 
-    private reinitSession(mat: Uint8Array<ArrayBufferLike>){
+    private reinitSession(mat: Uint8Array<ArrayBufferLike>) {
         if (!this.sessionKey || !this.macKey)
             throw new Error("Session not established");
 

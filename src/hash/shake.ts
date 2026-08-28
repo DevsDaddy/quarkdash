@@ -1,118 +1,308 @@
 /**
- * QuarkDash Crypto SHAKE-256 Implementation
+ * QuarkDash SHAKE Implementation
  *
  * @git             https://github.com/devsdaddy/quarkdash
- * @version         1.1.0
+ * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1007
+ * @build           1028
  * @website         https://dev.to/devsdaddy
- * @updated         24.08.2026
+ * @updated         28.08.2026
  */
-/* Import required modules */
+/* Load WASM Module */
 import {loadWasmModule} from "../core/wasm_loader";
 
-// Shake256 Constants
-const KECCAK_ROUNDS = 24;
+/* SHAKE Constants */
 const RATE_BYTES = 136;
-const RHO: number[] = [
-    0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18,
-    2, 61, 56, 14,
-];
-const RC: number[] = [
-    0x00000001, 0x00008082, 0x8000808a, 0x80008000, 0x0000808b, 0x80000001,
-    0x80008081, 0x00008009, 0x0000008a, 0x00000088, 0x80008009, 0x8000000a,
-    0x8000808b, 0x0000008b, 0x80008089, 0x80008003, 0x80008002, 0x00000080,
-    0x0000800a, 0x8000000a, 0x80008081, 0x00008080, 0x80000001, 0x80008008,
-];
+const RC = new Uint32Array([1, 0, 32898, 0, 32906, 2147483648, 2147516416, 2147483648, 32907, 0, 2147483649,
+    0, 2147516545, 2147483648, 32777, 2147483648, 138, 0, 136, 0, 2147516425, 0,
+    2147483658, 0, 2147516555, 0, 139, 2147483648, 32905, 2147483648, 32771,
+    2147483648, 32770, 2147483648, 128, 2147483648, 32778, 0, 2147483658, 2147483648,
+    2147516545, 2147483648, 32896, 2147483648, 2147483649, 0, 2147516424, 2147483648]);
 
 /**
- * Shake-256 Web Assembly Implementation
+ * Keccak Function
+ * @param s
  */
-export class Shake256Wasm {
-    // WASM Instances
-    public static initializedWasm = false;
-    private static instance: WebAssembly.Instance | null = null;
-    private static memory: WebAssembly.Memory | null = null;
-    private static shake256Func:
-        | ((
-        inputPtr: number,
-        inputLen: number,
-        outputPtr: number,
-        outputLen: number,
-    ) => void)
-        | null = null;
-    private static nextPtr: number = 0;
-
-    /**
-     * Alloc
-     * @param size
-     * @private
-     */
-    private static alloc(size: number): number {
-        const ptr = this.nextPtr;
-        this.nextPtr += size;
-        return ptr;
-    }
-
-    /**
-     * Initialize WASM Module
-     * @param wasmUrl {string} Path to module
-     */
-    public static async initWasm(wasmUrl: string): Promise<void> {
-        try {
-            if (this.initializedWasm) return Promise.resolve();
-
-            // Initialize Module
-            const module = await loadWasmModule(wasmUrl);
-            const imports = {
-                env: {
-                    memory: new WebAssembly.Memory({initial: 256, maximum: 512}),
-                },
-            };
-
-            this.instance = await WebAssembly.instantiate(module, imports);
-            const exports = this.instance.exports as any;
-            this.shake256Func = exports.shake256;
-            this.memory = imports.env.memory;
-            this.nextPtr = 0;
-            this.initializedWasm = true;
-        } catch (e) {
-            console.error(`WASM module initialization error. Switched to fallback.`);
-            this.initializedWasm = false;
-        }
-    }
-
-    /**
-     * Shake 256 Using WASM
-     * @param input {Uint8Array} Input buffer
-     * @param outputLen {number} Output length
-     * @returns {Uint8Array} Output buffer
-     */
-    public static shake256Wasm(input: Uint8Array, outputLen: number): Uint8Array {
-        try {
-            if (!this.shake256Func || !this.memory)
-                throw new Error("WASM not initialized. Call initWasm() first.");
-            const mem = new Uint8Array(this.memory.buffer);
-            const inputPtr = this.alloc(input.length);
-            const outputPtr = this.alloc(outputLen);
-            mem.set(input, inputPtr);
-            this.shake256Func(inputPtr, input.length, outputPtr, outputLen);
-            const output = new Uint8Array(outputLen);
-            output.set(mem.slice(outputPtr, outputPtr + outputLen));
-            return output;
-        } catch (e) {
-            // Not supported - fallback to JS
-            console.log(
-                "WASM Shake is not supported on this platform. Switched to fallback.",
-            );
-            this.initializedWasm = false;
-            return Shake256.hashSync(input, outputLen);
-        }
+function keccakF(s: Uint32Array) {
+    let h: number, l: number, n: number, c0: number, c1: number, c2: number, c3: number, c4: number, c5: number,
+        c6: number, c7: number, c8: number, c9: number,
+        b0: number, b1: number, b2: number, b3: number, b4: number, b5: number, b6: number, b7: number, b8: number,
+        b9: number, b10: number, b11: number, b12: number, b13: number, b14: number, b15: number, b16: number,
+        b17: number,
+        b18: number, b19: number, b20: number, b21: number, b22: number, b23: number, b24: number, b25: number,
+        b26: number, b27: number, b28: number, b29: number, b30: number, b31: number, b32: number, b33: number,
+        b34: number, b35: number, b36: number, b37: number, b38: number, b39: number, b40: number, b41: number,
+        b42: number, b43: number, b44: number, b45: number, b46: number, b47: number, b48: number, b49: number;
+    for (n = 0; n < 48; n += 2) {
+        c0 = s[0] ^ s[10] ^ s[20] ^ s[30] ^ s[40];
+        c1 = s[1] ^ s[11] ^ s[21] ^ s[31] ^ s[41];
+        c2 = s[2] ^ s[12] ^ s[22] ^ s[32] ^ s[42];
+        c3 = s[3] ^ s[13] ^ s[23] ^ s[33] ^ s[43];
+        c4 = s[4] ^ s[14] ^ s[24] ^ s[34] ^ s[44];
+        c5 = s[5] ^ s[15] ^ s[25] ^ s[35] ^ s[45];
+        c6 = s[6] ^ s[16] ^ s[26] ^ s[36] ^ s[46];
+        c7 = s[7] ^ s[17] ^ s[27] ^ s[37] ^ s[47];
+        c8 = s[8] ^ s[18] ^ s[28] ^ s[38] ^ s[48];
+        c9 = s[9] ^ s[19] ^ s[29] ^ s[39] ^ s[49];
+        h = c8 ^ ((c2 << 1) | (c3 >>> 31));
+        l = c9 ^ ((c3 << 1) | (c2 >>> 31));
+        s[0] ^= h;
+        s[1] ^= l;
+        s[10] ^= h;
+        s[11] ^= l;
+        s[20] ^= h;
+        s[21] ^= l;
+        s[30] ^= h;
+        s[31] ^= l;
+        s[40] ^= h;
+        s[41] ^= l;
+        h = c0 ^ ((c4 << 1) | (c5 >>> 31));
+        l = c1 ^ ((c5 << 1) | (c4 >>> 31));
+        s[2] ^= h;
+        s[3] ^= l;
+        s[12] ^= h;
+        s[13] ^= l;
+        s[22] ^= h;
+        s[23] ^= l;
+        s[32] ^= h;
+        s[33] ^= l;
+        s[42] ^= h;
+        s[43] ^= l;
+        h = c2 ^ ((c6 << 1) | (c7 >>> 31));
+        l = c3 ^ ((c7 << 1) | (c6 >>> 31));
+        s[4] ^= h;
+        s[5] ^= l;
+        s[14] ^= h;
+        s[15] ^= l;
+        s[24] ^= h;
+        s[25] ^= l;
+        s[34] ^= h;
+        s[35] ^= l;
+        s[44] ^= h;
+        s[45] ^= l;
+        h = c4 ^ ((c8 << 1) | (c9 >>> 31));
+        l = c5 ^ ((c9 << 1) | (c8 >>> 31));
+        s[6] ^= h;
+        s[7] ^= l;
+        s[16] ^= h;
+        s[17] ^= l;
+        s[26] ^= h;
+        s[27] ^= l;
+        s[36] ^= h;
+        s[37] ^= l;
+        s[46] ^= h;
+        s[47] ^= l;
+        h = c6 ^ ((c0 << 1) | (c1 >>> 31));
+        l = c7 ^ ((c1 << 1) | (c0 >>> 31));
+        s[8] ^= h;
+        s[9] ^= l;
+        s[18] ^= h;
+        s[19] ^= l;
+        s[28] ^= h;
+        s[29] ^= l;
+        s[38] ^= h;
+        s[39] ^= l;
+        s[48] ^= h;
+        s[49] ^= l;
+        b0 = s[0];
+        b1 = s[1];
+        b32 = (s[11] << 4) | (s[10] >>> 28);
+        b33 = (s[10] << 4) | (s[11] >>> 28);
+        b14 = (s[20] << 3) | (s[21] >>> 29);
+        b15 = (s[21] << 3) | (s[20] >>> 29);
+        b46 = (s[31] << 9) | (s[30] >>> 23);
+        b47 = (s[30] << 9) | (s[31] >>> 23);
+        b28 = (s[40] << 18) | (s[41] >>> 14);
+        b29 = (s[41] << 18) | (s[40] >>> 14);
+        b20 = (s[2] << 1) | (s[3] >>> 31);
+        b21 = (s[3] << 1) | (s[2] >>> 31);
+        b2 = (s[13] << 12) | (s[12] >>> 20);
+        b3 = (s[12] << 12) | (s[13] >>> 20);
+        b34 = (s[22] << 10) | (s[23] >>> 22);
+        b35 = (s[23] << 10) | (s[22] >>> 22);
+        b16 = (s[33] << 13) | (s[32] >>> 19);
+        b17 = (s[32] << 13) | (s[33] >>> 19);
+        b48 = (s[42] << 2) | (s[43] >>> 30);
+        b49 = (s[43] << 2) | (s[42] >>> 30);
+        b40 = (s[5] << 30) | (s[4] >>> 2);
+        b41 = (s[4] << 30) | (s[5] >>> 2);
+        b22 = (s[14] << 6) | (s[15] >>> 26);
+        b23 = (s[15] << 6) | (s[14] >>> 26);
+        b4 = (s[25] << 11) | (s[24] >>> 21);
+        b5 = (s[24] << 11) | (s[25] >>> 21);
+        b36 = (s[34] << 15) | (s[35] >>> 17);
+        b37 = (s[35] << 15) | (s[34] >>> 17);
+        b18 = (s[45] << 29) | (s[44] >>> 3);
+        b19 = (s[44] << 29) | (s[45] >>> 3);
+        b10 = (s[6] << 28) | (s[7] >>> 4);
+        b11 = (s[7] << 28) | (s[6] >>> 4);
+        b42 = (s[17] << 23) | (s[16] >>> 9);
+        b43 = (s[16] << 23) | (s[17] >>> 9);
+        b24 = (s[26] << 25) | (s[27] >>> 7);
+        b25 = (s[27] << 25) | (s[26] >>> 7);
+        b6 = (s[36] << 21) | (s[37] >>> 11);
+        b7 = (s[37] << 21) | (s[36] >>> 11);
+        b38 = (s[47] << 24) | (s[46] >>> 8);
+        b39 = (s[46] << 24) | (s[47] >>> 8);
+        b30 = (s[8] << 27) | (s[9] >>> 5);
+        b31 = (s[9] << 27) | (s[8] >>> 5);
+        b12 = (s[18] << 20) | (s[19] >>> 12);
+        b13 = (s[19] << 20) | (s[18] >>> 12);
+        b44 = (s[29] << 7) | (s[28] >>> 25);
+        b45 = (s[28] << 7) | (s[29] >>> 25);
+        b26 = (s[38] << 8) | (s[39] >>> 24);
+        b27 = (s[39] << 8) | (s[38] >>> 24);
+        b8 = (s[48] << 14) | (s[49] >>> 18);
+        b9 = (s[49] << 14) | (s[48] >>> 18);
+        s[0] = b0 ^ (~b2 & b4);
+        s[1] = b1 ^ (~b3 & b5);
+        s[10] = b10 ^ (~b12 & b14);
+        s[11] = b11 ^ (~b13 & b15);
+        s[20] = b20 ^ (~b22 & b24);
+        s[21] = b21 ^ (~b23 & b25);
+        s[30] = b30 ^ (~b32 & b34);
+        s[31] = b31 ^ (~b33 & b35);
+        s[40] = b40 ^ (~b42 & b44);
+        s[41] = b41 ^ (~b43 & b45);
+        s[2] = b2 ^ (~b4 & b6);
+        s[3] = b3 ^ (~b5 & b7);
+        s[12] = b12 ^ (~b14 & b16);
+        s[13] = b13 ^ (~b15 & b17);
+        s[22] = b22 ^ (~b24 & b26);
+        s[23] = b23 ^ (~b25 & b27);
+        s[32] = b32 ^ (~b34 & b36);
+        s[33] = b33 ^ (~b35 & b37);
+        s[42] = b42 ^ (~b44 & b46);
+        s[43] = b43 ^ (~b45 & b47);
+        s[4] = b4 ^ (~b6 & b8);
+        s[5] = b5 ^ (~b7 & b9);
+        s[14] = b14 ^ (~b16 & b18);
+        s[15] = b15 ^ (~b17 & b19);
+        s[24] = b24 ^ (~b26 & b28);
+        s[25] = b25 ^ (~b27 & b29);
+        s[34] = b34 ^ (~b36 & b38);
+        s[35] = b35 ^ (~b37 & b39);
+        s[44] = b44 ^ (~b46 & b48);
+        s[45] = b45 ^ (~b47 & b49);
+        s[6] = b6 ^ (~b8 & b0);
+        s[7] = b7 ^ (~b9 & b1);
+        s[16] = b16 ^ (~b18 & b10);
+        s[17] = b17 ^ (~b19 & b11);
+        s[26] = b26 ^ (~b28 & b20);
+        s[27] = b27 ^ (~b29 & b21);
+        s[36] = b36 ^ (~b38 & b30);
+        s[37] = b37 ^ (~b39 & b31);
+        s[46] = b46 ^ (~b48 & b40);
+        s[47] = b47 ^ (~b49 & b41);
+        s[8] = b8 ^ (~b0 & b2);
+        s[9] = b9 ^ (~b1 & b3);
+        s[18] = b18 ^ (~b10 & b12);
+        s[19] = b19 ^ (~b11 & b13);
+        s[28] = b28 ^ (~b20 & b22);
+        s[29] = b29 ^ (~b21 & b23);
+        s[38] = b38 ^ (~b30 & b32);
+        s[39] = b39 ^ (~b31 & b33);
+        s[48] = b48 ^ (~b40 & b42);
+        s[49] = b49 ^ (~b41 & b43);
+        s[0] ^= RC[n];
+        s[1] ^= RC[n + 1];
     }
 }
 
 /**
- * Returns is wasm shake or not
+ * Shake WASM
+ */
+export class Shake256Wasm {
+    public static initializedWasm = false;
+    private static instance: WebAssembly.Instance | null = null;
+    private static memory: WebAssembly.Memory | null = null;
+    private static shake256Func: ((inputPtr: number, inputLen: number, outputPtr: number, outputLen: number) => void) | null = null;
+    private static nextPtr: number = 0;
+    private static bufferPtr: number = 0;
+    private static bufferCap: number = 0;
+
+    /**
+     * Initialize WASM
+     * @param wasmUrl {string} WASM Url
+     */
+    public static async initWasm(wasmUrl: string): Promise<void> {
+        try {
+            if (this.initializedWasm) return;
+            const module = await loadWasmModule(wasmUrl);
+            const memory = new WebAssembly.Memory({initial: 256, maximum: 512});
+            const imports: any = {
+                env: {
+                    memory, abort: () => {
+                        throw new Error("wasm abort");
+                    }
+                }
+            };
+            try {
+                this.instance = await WebAssembly.instantiate(module, imports);
+            } catch {
+                const imports2: any = {env: {memory}};
+                this.instance = await WebAssembly.instantiate(module, imports2);
+            }
+            const exports = this.instance.exports as any;
+            this.shake256Func = exports.shake256 ?? exports._shake256 ?? null;
+            if (!this.shake256Func) throw new Error("shake256 export missing");
+            this.memory = (exports.memory as WebAssembly.Memory) ?? memory;
+            this.bufferCap = this.memory!.buffer.byteLength;
+            this.nextPtr = 0;
+            this.initializedWasm = true;
+        } catch (e) {
+            this.initializedWasm = false;
+        }
+    }
+
+    /**
+     * SHAKE256 WASM
+     * @param input {Uint8Array} Input
+     * @param outputLen {number} Output length
+     */
+    public static shake256Wasm(input: Uint8Array, outputLen: number): Uint8Array {
+        try {
+            if (!this.shake256Func || !this.memory) throw new Error("WASM not initialized");
+            if (input.length + outputLen + 64 > this.memory.buffer.byteLength) {
+                const needed = input.length + outputLen + 65536;
+                const pages = Math.ceil(needed / 65536);
+                try {
+                    this.memory.grow(pages - this.memory.buffer.byteLength / 65536);
+                    this.bufferCap = this.memory.buffer.byteLength;
+                } catch {
+                }
+            }
+            const mem = new Uint8Array(this.memory.buffer);
+            const inputPtr = this.alloc(input.length);
+            const outputPtr = this.alloc(outputLen);
+            if (inputPtr === 0 && input.length > 0) throw new Error("alloc failed");
+            mem.set(input, inputPtr);
+            this.shake256Func(inputPtr, input.length, outputPtr, outputLen);
+            const out = new Uint8Array(outputLen);
+            out.set(mem.subarray(outputPtr, outputPtr + outputLen));
+            this.nextPtr = outputPtr + outputLen;
+            return out;
+        } catch (e) {
+            this.initializedWasm = false;
+            return Shake256.hashSync(input, outputLen);
+        }
+    }
+
+    // Allocation
+    private static alloc(size: number): number {
+        const ptr = this.nextPtr;
+        const next = ptr + ((size + 7) & ~7);
+        if (next > this.bufferCap) {
+            this.nextPtr = 0;
+            return 0;
+        }
+        this.nextPtr = next;
+        return ptr;
+    }
+}
+
+/**
+ * Check if wasm is initialized
  */
 export function isWasmShake() {
     return Shake256Wasm.initializedWasm;
@@ -122,220 +312,177 @@ export function isWasmShake() {
  * Keccak State
  */
 export class KeccakState {
-    private readonly stateLow: Uint32Array;
-    private readonly stateHigh: Uint32Array;
+    public s: Uint32Array;
+    private pos: number = 0;
 
     /**
-     * Create Keccak State
+     * Create Keccak state
      */
     constructor() {
-        this.stateLow = new Uint32Array(25);
-        this.stateHigh = new Uint32Array(25);
+        this.s = new Uint32Array(50);
     }
 
     /**
-     * XOR of byte to state
-     * @param byte
-     * @param index
+     * Reset Keccak State
+     */
+    public reset() {
+        this.s.fill(0);
+        this.pos = 0;
+    }
+
+    /**
+     * Absorb Byte
+     * @param byte {number} Byte
+     * @param index {number} Index
      */
     public absorbByte(byte: number, index: number): void {
-        const lane = index >> 3;
-        const shift = (index & 7) << 3;
-        if (shift < 32) {
-            this.stateLow[lane] ^= byte << shift;
-        } else {
-            this.stateHigh[lane] ^= byte << (shift - 32);
-        }
+        const wordLane = index >> 2;
+        const wordShift = (index & 3) << 3;
+        this.s[wordLane] ^= byte << wordShift;
     }
 
     /**
-     * Extract byte from state
-     * @param index {number}
+     * Absorb bytes bulk
+     * @param data {Uint8Array} Data
+     * @param inOffset {number} In offset
+     * @param len {number} Length
+     */
+    public absorbBulk(data: Uint8Array, inOffset: number, len: number): number {
+        let written = 0;
+        while (written < len) {
+            const space = RATE_BYTES - this.pos;
+            const take = Math.min(space, len - written);
+            let p = this.pos;
+            let src = inOffset + written;
+            const s = this.s;
+            let i = 0;
+            for (; i + 3 < take; i += 4) {
+                const w = data[src + i] | (data[src + i + 1] << 8) | (data[src + i + 2] << 16) | (data[src + i + 3] << 24);
+                const lane = (p + i) >> 2;
+                const shift = ((p + i) & 3) << 3;
+                if (shift === 0) s[lane] ^= w;
+                else {
+                    s[lane] ^= w << shift;
+                    s[lane + 1] ^= w >>> (32 - shift);
+                }
+            }
+            for (; i < take; i++) {
+                const lane = (p + i) >> 2;
+                const shift = ((p + i) & 3) << 3;
+                s[lane] ^= data[src + i] << shift;
+            }
+            this.pos += take;
+            written += take;
+            if (this.pos === RATE_BYTES) {
+                keccakF(this.s);
+                this.pos = 0;
+            }
+        }
+        return written;
+    }
+
+    /**
+     * Pad and Permute
+     */
+    public padAndPermute() {
+        const p = this.pos;
+        this.s[p >> 2] ^= 0x1f << ((p & 3) << 3);
+        this.s[(RATE_BYTES - 1) >> 2] ^= 0x80 << (((RATE_BYTES - 1) & 3) << 3);
+        keccakF(this.s);
+        this.pos = 0;
+    }
+
+    /**
+     * Extract byte
+     * @param index {number} Index
      */
     public extractByte(index: number): number {
-        const lane = index >> 3;
-        const shift = (index & 7) << 3;
-        let word: number;
-        if (shift < 32) {
-            word = this.stateLow[lane];
-        } else {
-            word = this.stateHigh[lane];
-        }
-        return (word >>> shift) & 0xff;
+        const wordLane = index >> 2;
+        const wordShift = (index & 3) << 3;
+        return (this.s[wordLane] >>> wordShift) & 0xff;
     }
 
     /**
-     * Permute Keccak-f[1600]
+     * Squeeze into
+     * @param out {Uint8Array} Output
+     * @param outOff {number} Offset
+     * @param len {number} Length
+     */
+    public squeezeInto(out: Uint8Array, outOff: number, len: number) {
+        let pos = 0;
+        let squeezePos = 0;
+        while (pos < len) {
+            const take = Math.min(RATE_BYTES - squeezePos, len - pos);
+            for (let i = 0; i < take; i++) out[outOff + pos + i] = (this.s[(squeezePos + i) >> 2] >>> (((squeezePos + i) & 3) << 3)) & 0xff;
+            pos += take;
+            squeezePos += take;
+            if (squeezePos === RATE_BYTES) {
+                if (pos < len) keccakF(this.s);
+                squeezePos = 0;
+            }
+        }
+    }
+
+    /**
+     * Permute
      */
     public permute(): void {
-        const stateLow = this.stateLow;
-        const stateHigh = this.stateHigh;
-
-        for (let round = 0; round < KECCAK_ROUNDS; round++) {
-            // Theta step
-            const C0 = new Array(5);
-            const C1 = new Array(5);
-            for (let x = 0; x < 5; x++) {
-                let l = stateLow[x];
-                let h = stateHigh[x];
-                for (let y = 1; y < 5; y++) {
-                    const idx = x + y * 5;
-                    l ^= stateLow[idx];
-                    h ^= stateHigh[idx];
-                }
-                C0[x] = l;
-                C1[x] = h;
-            }
-            const D0 = new Array(5);
-            const D1 = new Array(5);
-            for (let x = 0; x < 5; x++) {
-                const prev = (x + 4) % 5;
-                const next = (x + 1) % 5;
-                // rot(C[next], 1)
-                let rotL = C0[next];
-                let rotH = C1[next];
-                const t = (rotL >>> 31) | (rotH << 1);
-                rotH = (rotH >>> 31) | (rotL << 1);
-                rotL = t;
-                D0[x] = C0[prev] ^ rotL;
-                D1[x] = C1[prev] ^ rotH;
-            }
-            for (let i = 0; i < 25; i++) {
-                const x = i % 5;
-                stateLow[i] ^= D0[x];
-                stateHigh[i] ^= D1[x];
-            }
-
-            let x = 1,
-                y = 0;
-            let curL = stateLow[1];
-            let curH = stateHigh[1];
-            for (let t = 0; t < 24; t++) {
-                const nx = y;
-                const ny = (2 * x + 3 * y) % 5;
-                const idx = nx + ny * 5;
-                const nextL = stateLow[idx];
-                const nextH = stateHigh[idx];
-                const r = RHO[t + 1];
-                // rot(cur, r)
-                let rotL = curL,
-                    rotH = curH;
-                if (r >= 32) {
-                    const r2 = r - 32;
-                    const tL = (rotL >>> r2) | (rotH << (32 - r2));
-                    const tH = (rotH >>> r2) | (rotL << (32 - r2));
-                    rotL = tL;
-                    rotH = tH;
-                } else if (r > 0) {
-                    const tL = (rotL >>> r) | (rotH << (32 - r));
-                    const tH = (rotH >>> r) | (rotL << (32 - r));
-                    rotL = tL;
-                    rotH = tH;
-                }
-                stateLow[idx] = rotL;
-                stateHigh[idx] = rotH;
-                curL = nextL;
-                curH = nextH;
-                x = nx;
-                y = ny;
-            }
-
-            for (let y = 0; y < 5; y++) {
-                const base = y * 5;
-                const rowL0 = stateLow[base];
-                const rowH0 = stateHigh[base];
-                const rowL1 = stateLow[base + 1];
-                const rowH1 = stateHigh[base + 1];
-                const rowL2 = stateLow[base + 2];
-                const rowH2 = stateHigh[base + 2];
-                const rowL3 = stateLow[base + 3];
-                const rowH3 = stateHigh[base + 3];
-                const rowL4 = stateLow[base + 4];
-                const rowH4 = stateHigh[base + 4];
-                // new0 = row0 ^ ((~row1) & row2)
-                stateLow[base] = rowL0 ^ (~rowL1 & rowL2);
-                stateHigh[base] = rowH0 ^ (~rowH1 & rowH2);
-                stateLow[base + 1] = rowL1 ^ (~rowL2 & rowL3);
-                stateHigh[base + 1] = rowH1 ^ (~rowH2 & rowH3);
-                stateLow[base + 2] = rowL2 ^ (~rowL3 & rowL4);
-                stateHigh[base + 2] = rowH2 ^ (~rowH3 & rowH4);
-                stateLow[base + 3] = rowL3 ^ (~rowL4 & rowL0);
-                stateHigh[base + 3] = rowH3 ^ (~rowH4 & rowH0);
-                stateLow[base + 4] = rowL4 ^ (~rowL0 & rowL1);
-                stateHigh[base + 4] = rowH4 ^ (~rowH0 & rowH1);
-            }
-
-            // Iota step
-            stateLow[0] ^= RC[round] & 0xffffffff;
-            stateHigh[0] ^= (RC[round] >>> 0) & 0xffffffff;
-        }
+        keccakF(this.s);
     }
 }
 
 /**
- * Shake-256 Hash
+ * Shake256 Implementation
  */
 export class Shake256 {
     /**
-     * Shake-256 async
-     * @param input {Uint8Array} Input buffer
-     * @param outputLength {number} Output buffer length
-     * @returns {Uint8Array} Output buffer
+     * Hash
+     * @param input {Uint8Array} Input
+     * @param outputLength {number} Output length
      */
-    public static async hash(
-        input: Uint8Array,
-        outputLength: number,
-    ): Promise<Uint8Array> {
+    public static async hash(input: Uint8Array, outputLength: number): Promise<Uint8Array> {
         return this.process(input, outputLength);
     }
 
     /**
-     * Shake-256 sync
-     * @param input {Uint8Array} Input buffer
-     * @param outputLength {number} Output buffer length
-     * @returns {Uint8Array} Output buffer
+     * Hash in Sync Mode
+     * @param input {Uint8Array} Input
+     * @param outputLength {number} Output length
      */
     public static hashSync(input: Uint8Array, outputLength: number): Uint8Array {
         return this.process(input, outputLength);
     }
 
     /**
-     * Process SHAKE-256
-     * @param input {Uint8Array} Input buffer
+     * Hash chunks in sync mode
+     * @param chunks {Uint8Array} Chunks
      * @param outputLength {number} Output length
-     * @returns {Uint8Array} Output buffer
-     * @private
      */
-    private static process(input: Uint8Array, outputLength: number): Uint8Array {
-        const state = new KeccakState();
-        let offset = 0;
-        const inputLen = input.length;
-
-        while (offset < inputLen) {
-            let blockSize = Math.min(RATE_BYTES, inputLen - offset);
-            for (let i = 0; i < blockSize; i++) {
-                state.absorbByte(input[offset + i], i);
-            }
-            offset += blockSize;
-            if (blockSize === RATE_BYTES || offset === inputLen) {
-                if (offset === inputLen) {
-                    state.absorbByte(0x1f, blockSize);
-                    state.absorbByte(0x80, blockSize + 1);
-                }
-                state.permute();
-            }
-        }
-
+    public static hashMultiSync(chunks: Uint8Array[], outputLength: number): Uint8Array {
+        const st = new KeccakState();
+        for (const c of chunks) if (c.length) st.absorbBulk(c, 0, c.length);
+        st.padAndPermute();
         const out = new Uint8Array(outputLength);
-        let outPos = 0;
-        while (outPos < outputLength) {
-            for (let i = 0; i < RATE_BYTES && outPos < outputLength; i++) {
-                out[outPos++] = state.extractByte(i);
-            }
-            if (outPos < outputLength) {
-                state.permute();
-            }
-        }
+        st.squeezeInto(out, 0, outputLength);
+        return out;
+    }
+
+    /**
+     * Hash chunks
+     * @param chunks {Uint8Array} Chunks
+     * @param outputLength {number} Output length
+     */
+    public static async hashMulti(chunks: Uint8Array[], outputLength: number): Promise<Uint8Array> {
+        return this.hashMultiSync(chunks, outputLength);
+    }
+
+    // Process SHAKE hash
+    private static process(input: Uint8Array, outputLength: number): Uint8Array {
+        const st = new KeccakState();
+        if (input.length) st.absorbBulk(input, 0, input.length);
+        st.padAndPermute();
+        const out = new Uint8Array(outputLength);
+        st.squeezeInto(out, 0, outputLength);
         return out;
     }
 }

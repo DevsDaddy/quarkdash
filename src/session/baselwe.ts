@@ -10,9 +10,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1024
+ * @build           1030
  * @website         https://dev.to/devsdaddy
- * @updated         24.08.2026
+ * @updated         28.08.2026
  */
 /* Import required modules */
 import {QuarkDashUtils} from "../core/utils";
@@ -27,7 +27,7 @@ export class BaseRingLWE {
     // Ring parameters: override in child RLWE and RRLWE
     protected readonly N: number = 256;
     protected readonly Q: bigint = 7681n;
-    protected readonly ROOT: bigint = 7n;
+    protected readonly ROOT: bigint = 5685n;
     protected readonly INV_N: bigint = this.modInverse(BigInt(this.N), this.Q);
 
     // NTT Security setup (can be disabled for benchmarks)
@@ -106,16 +106,15 @@ export class BaseRingLWE {
         const sp = this.smallPoly();
         const ep = this.errorPoly();
 
-        // u = a·sp + ep : will be sent
         const uArr = this.secureMultiply(a, sp);
         for (let i = 0; i < this.N; i++)
             uArr[i] = (((uArr[i] + ep[i]) % this.Q) + this.Q) % this.Q;
 
-        // w = b·sp : shared secret in polynomes
         const w = this.secureMultiply(b, sp);
-        const rawSecret = this.roundToBits(w); // 256 bit to 32 bytes (Q/2)
+        const {bits: rawSecret, hint} = this.roundToBitsWithHint(w);
 
-        const ciphertext = this.serializePoly(uArr);
+        const uBytes = this.serializePoly(uArr);
+        const ciphertext = QuarkDashUtils.concatBytes(uBytes, hint);
         const sharedSecret = this.hashSharedSecretSync(
             rawSecret,
             publicKey,
@@ -154,9 +153,19 @@ export class BaseRingLWE {
         this.validatePublicKey(peerPublicKey);
 
         const s = this.deserializePoly(privateKey);
-        const u = this.deserializePoly(ciphertext);
-        const w = this.secureMultiply(u, s); // w = u·s — должен совпасть с b·sp
-        const rawSecret = this.roundToBits(w);
+        let u: bigint[];
+        let hint: Uint8Array;
+        if (ciphertext.length === this.N * 2 + 32) {
+            u = this.deserializePoly(ciphertext.slice(0, this.N * 2));
+            hint = ciphertext.slice(this.N * 2);
+        } else {
+            u = this.deserializePoly(ciphertext);
+            const wTmp = this.secureMultiply(u, s);
+            const rawTmp = this.roundToBits(wTmp);
+            return this.hashSharedSecretSync(rawTmp, peerPublicKey, ciphertext);
+        }
+        const w = this.secureMultiply(u, s);
+        const rawSecret = this.recToBits(w, hint);
         return this.hashSharedSecretSync(rawSecret, peerPublicKey, ciphertext);
     }
 
@@ -206,10 +215,74 @@ export class BaseRingLWE {
     protected roundToBits(poly: bigint[]): Uint8Array {
         const result = new Uint8Array(32);
         for (let i = 0; i < this.N; i++) {
-            const bit = Number(poly[i]) > Number(this.Q) / 2 ? 1 : 0;
+            const bit = 2n * poly[i] > this.Q ? 1 : 0;
             if (bit) result[i >> 3] |= 1 << (i & 7);
         }
         return result;
+    }
+
+    /**
+     * Rec helper function
+      * @param v {bigint} Vector
+     * @protected
+     */
+    protected helpRec(v: bigint): number {
+        if (4n * v < this.Q) return 0;
+        if (2n * v < this.Q) return 1;
+        if (4n * v < 3n * this.Q) return 0;
+        return 1;
+    }
+
+    /**
+     * Rec
+     * @param v {bigint} Vector
+     * @param hint {number} Hint
+     * @protected
+     */
+    protected rec(v: bigint, hint: number): number {
+        const eightVp = 8n * v;
+        const Q = this.Q;
+        const c0 = hint === 0 ? Q : 3n * Q;
+        const c1 = hint === 0 ? 5n * Q : 7n * Q;
+        const dist = (target: bigint) => {
+            let d = eightVp >= target ? eightVp - target : target - eightVp;
+            if (d > 4n * Q) d = 8n * Q - d;
+            return d;
+        };
+        return dist(c0) < dist(c1) ? 0 : 1;
+    }
+
+    /**
+     * Round to bits with hint
+     * @param poly {bigint[]} Polynome
+     * @protected
+     */
+    protected roundToBitsWithHint(poly: bigint[]): { bits: Uint8Array; hint: Uint8Array } {
+        const bits = new Uint8Array(32);
+        const hint = new Uint8Array(32);
+        for (let i = 0; i < this.N; i++) {
+            const b = 2n * poly[i] > this.Q ? 1 : 0;
+            if (b) bits[i >> 3] |= 1 << (i & 7);
+            const h = this.helpRec(poly[i]);
+            if (h) hint[i >> 3] |= 1 << (i & 7);
+        }
+        return {bits, hint};
+    }
+
+    /**
+     * Rec to bits
+     * @param poly {bigint[]} Polynome
+     * @param hint {Uint8Array} Hint
+     * @protected
+     */
+    protected recToBits(poly: bigint[], hint: Uint8Array): Uint8Array {
+        const bits = new Uint8Array(32);
+        for (let i = 0; i < this.N; i++) {
+            const h = (hint[i >> 3] >> (i & 7)) & 1;
+            const b = this.rec(poly[i], h);
+            if (b) bits[i >> 3] |= 1 << (i & 7);
+        }
+        return bits;
     }
 
     /* VALIDATION AND SERIALIZATION */
@@ -257,7 +330,8 @@ export class BaseRingLWE {
      * @protected
      */
     protected validateCiphertext(ct: Uint8Array): void {
-        if (ct.length !== this.N * 2) throw new Error(`Invalid ciphertext length`);
+        if (ct.length !== this.N * 2 && ct.length !== this.N * 2 + 32)
+            throw new Error(`Invalid ciphertext length`);
     }
 
     /**
@@ -382,7 +456,35 @@ export class BaseRingLWE {
      * @protected
      */
     protected getInvWlen(len: number): bigint {
-        return this.getWlen(len);
+        let v = this.invWlenCache.get(len);
+        if (v === undefined) {
+            const w = this.getWlen(len);
+            v = this.modInverse(w, this.Q);
+            this.invWlenCache.set(len, v);
+        }
+        return v;
+    }
+
+    /**
+     * Bit reverse
+     * @param a {bigint[]} Input value
+     * @protected
+     */
+    protected bitReverse(a: bigint[]): bigint[] {
+        const n = a.length;
+        const res = [...a];
+        let j = 0;
+        for (let i = 1; i < n; i++) {
+            let bit = n >> 1;
+            for (; j & bit; bit >>= 1) j ^= bit;
+            j ^= bit;
+            if (i < j) {
+                const tmp = res[i];
+                res[i] = res[j];
+                res[j] = tmp;
+            }
+        }
+        return res;
     }
 
     /**
@@ -392,7 +494,7 @@ export class BaseRingLWE {
      * @protected
      */
     protected hardenedNTT(poly: bigint[]): bigint[] {
-        const res: bigint[] = [...poly];
+        const res = this.bitReverse([...poly]);
         let len = 2;
         while (len <= this.N) {
             const wlen = this.getWlen(len);
@@ -412,26 +514,26 @@ export class BaseRingLWE {
     }
 
     /**
-     * Hardened Inv NTT
+     * Hardened inv NTT
      * @param poly {bigint[]} Polynome
      * @protected
      */
     protected hardenedInvNTT(poly: bigint[]): bigint[] {
-        const res: bigint[] = [...poly];
-        let len = this.N;
-        while (len >= 2) {
-            const wlen = this.getWlen(len);
+        const res = this.bitReverse([...poly]);
+        let len = 2;
+        while (len <= this.N) {
+            const wlen = this.getInvWlen(len);
             for (let i = 0; i < this.N; i += len) {
                 let w = 1n;
                 for (let j = 0; j < len / 2; j++) {
-                    const u = res[i + j],
-                        v = res[i + j + len / 2];
+                    const u = res[i + j];
+                    const v = (res[i + j + len / 2] * w) % this.Q;
                     res[i + j] = (u + v) % this.Q;
-                    res[i + j + len / 2] = ((u - v + this.Q) * w) % this.Q;
+                    res[i + j + len / 2] = (u - v + this.Q) % this.Q;
                     w = (w * wlen) % this.Q;
                 }
             }
-            len >>= 1;
+            len <<= 1;
         }
         for (let i = 0; i < this.N; i++) res[i] = (res[i] * this.INV_N) % this.Q;
         return res;
@@ -444,33 +546,28 @@ export class BaseRingLWE {
      * @protected
      */
     protected invNTT(poly: bigint[]): bigint[] {
-        const res = [...poly];
-        let len = this.N;
-        while (len >= 2) {
-            const wlen = this.powMod(this.ROOT, BigInt(this.N / len), this.Q);
+        const res = this.bitReverse([...poly]);
+        let len = 2;
+        while (len <= this.N) {
+            const wlen = this.modInverse(this.powMod(this.ROOT, BigInt(this.N / len), this.Q), this.Q);
             for (let i = 0; i < this.N; i += len) {
                 let w = 1n;
                 for (let j = 0; j < len / 2; j++) {
-                    const u = res[i + j],
-                        v = res[i + j + len / 2];
+                    const u = res[i + j];
+                    const v = (res[i + j + len / 2] * w) % this.Q;
                     res[i + j] = (u + v) % this.Q;
-                    res[i + j + len / 2] = ((u - v + this.Q) * w) % this.Q;
+                    res[i + j + len / 2] = (u - v + this.Q) % this.Q;
                     w = (w * wlen) % this.Q;
                 }
             }
-            len >>= 1;
+            len <<= 1;
         }
         for (let i = 0; i < this.N; i++) res[i] = (res[i] * this.INV_N) % this.Q;
         return res;
     }
 
-    /**
-     * NTT
-     * @param poly {bigint[]} Polynome
-     * @protected
-     */
     protected ntt(poly: bigint[]): bigint[] {
-        const res = [...poly];
+        const res = this.bitReverse([...poly]);
         let len = 2;
         while (len <= this.N) {
             const wlen = this.powMod(this.ROOT, BigInt(this.N / len), this.Q);
@@ -480,7 +577,7 @@ export class BaseRingLWE {
                     const u = res[i + j];
                     const v = (res[i + j + len / 2] * w) % this.Q;
                     res[i + j] = (u + v) % this.Q;
-                    res[i + j + len / 2] = BigInt((u - v + this.Q) % this.Q);
+                    res[i + j + len / 2] = (u - v + this.Q) % this.Q;
                     w = (w * wlen) % this.Q;
                 }
             }

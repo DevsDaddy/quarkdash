@@ -6,9 +6,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1023
+ * @build           1027
  * @website         https://dev.to/devsdaddy
- * @updated         22.08.2026
+ * @updated         28.08.2026
  */
 /**
  * Keystream Generator Interface
@@ -118,7 +118,7 @@ export abstract class LazyKeystream implements IKeystreamGenerator {
      * @param data {Uint8Array} Input buffer
      * @param keystreamOffset {number} Offset
      */
-    public xor(data: Uint8Array, keystreamOffset : number = 0): Uint8Array {
+    public xor(data: Uint8Array, keystreamOffset: number = 0): Uint8Array {
         const out = new Uint8Array(data.length);
         this.xorInto(data, out, keystreamOffset);
         return out;
@@ -130,24 +130,35 @@ export abstract class LazyKeystream implements IKeystreamGenerator {
      * @param output {Uint8Array} Output buffer
      * @param keystreamOffset {number} Offset
      */
-    public xorInto(input: Uint8Array, output: Uint8Array, keystreamOffset : number = 0): void {
+    public xorInto(input: Uint8Array, output: Uint8Array, keystreamOffset: number = 0): void {
         if (output.length < input.length)
             throw new Error("Output buffer too small");
-
         let remaining = input.length;
         let inPos = 0;
         let ksPos = keystreamOffset;
-
         while (remaining > 0) {
-            const blockIdx = Math.floor(ksPos / this.blockSize);
+            const blockIdx = (ksPos / this.blockSize) | 0;
             const inBlockOffset = ksPos % this.blockSize;
             const block = this.getBlock(blockIdx);
-
             const take = Math.min(this.blockSize - inBlockOffset, remaining);
-            for (let i = 0; i < take; i++) {
+            let i = 0;
+            const blockView = new DataView(block.buffer, block.byteOffset, block.byteLength);
+            const inView = new DataView(input.buffer, input.byteOffset + inPos, take);
+            const outView = new DataView(output.buffer, output.byteOffset + inPos, take);
+            const aligned = (inBlockOffset & 3) === 0 && (inPos & 3) === 0;
+            if (aligned) {
+                const words = take >> 2;
+                for (let w = 0; w < words; w++) {
+                    const off = inBlockOffset + (w << 2);
+                    const kw = blockView.getUint32(off, true);
+                    const iw = inView.getUint32(w << 2, true);
+                    outView.setUint32(w << 2, kw ^ iw, true);
+                }
+                i = words << 2;
+            }
+            for (; i < take; i++) {
                 output[inPos + i] = input[inPos + i] ^ block[inBlockOffset + i];
             }
-
             inPos += take;
             ksPos += take;
             remaining -= take;
@@ -158,7 +169,7 @@ export abstract class LazyKeystream implements IKeystreamGenerator {
      * Stream blocks
      * @param startBlock {number} Start block
      */
-    * blocks(startBlock : number = 0): Generator<Uint8Array, void, unknown> {
+    * blocks(startBlock: number = 0): Generator<Uint8Array, void, unknown> {
         let idx = startBlock;
         while (true) {
             yield this.getBlock(idx++);
