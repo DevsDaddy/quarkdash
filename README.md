@@ -8,6 +8,8 @@
 
 ![QuarkDash Crypto NPM](https://badge.fury.io/js/quarkdash.svg) ![QuarkDash Crypto - MIT opensource](https://img.shields.io/badge/License-MIT-yellow.svg)
 
+> Now available for [Go applications / servers](https://github.com/DevsDaddy/quarkdash-go)
+
 ---
 
 [Paper](whitepaper.pdf) | [About](#about-quarkdash-crypto) | [Get Started](#get-started) | [Example](#basic-example) | [Benchmark](#benchmark) | [Docs](https://github.com/devsdaddy/quarkdash/wiki) | [Scheme](https://app.holst.so/share/b/7ae942f8-8a40-42c9-9991-3b624f147da8)
