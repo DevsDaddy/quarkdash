@@ -4,9 +4,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.1.0
  * @author          Elijah Rastorguev
- * @build           1009
+ * @build           1013
  * @website         https://dev.to/devsdaddy
- * @updated         28.08.2026
+ * @updated         05.09.2026
  */
 /* Import required modules */
 import {
@@ -20,6 +20,9 @@ import {
     Shake256,
     Shake256Wasm,
 } from "../src";
+import {GimliWasm} from "../src/cipher/gimli_wasm";
+import {ChaChaWasm} from "../src/cipher/chacha_wasm";
+import {NttWasm} from "../src/session/ntt_wasm";
 import {performance} from "perf_hooks";
 
 /* Benchmark Constants */
@@ -273,23 +276,148 @@ async function main() {
         );
     }
 
+    // Add WASM Support
+    console.log("\n\x1b[1m%s\x1b[0m", "=== WASM Gimli/ChaCha/NTT ===");
+    let gimliWasmReady = false, chachaWasmReady = false, nttWasmReady = false;
+    try {
+        await GimliWasm.initWasm("./wasm/gimli.wasm");
+        gimliWasmReady = GimliWasm.isReady();
+    } catch {
+        gimliWasmReady = false;
+    }
+    try {
+        await ChaChaWasm.initWasm("./wasm/chacha.wasm");
+        chachaWasmReady = ChaChaWasm.isReady();
+    } catch {
+        chachaWasmReady = false;
+    }
+    try {
+        await NttWasm.initWasm("./wasm/ntt.wasm");
+        nttWasmReady = NttWasm.isReady();
+    } catch {
+        nttWasmReady = false;
+    }
+
+    console.log(`WASM Gimli ${gimliWasmReady ? "ready" : "fallback"} | ChaCha ${chachaWasmReady ? "ready" : "fallback"} | NTT ${nttWasmReady ? "ready (SIMD)" : "fallback"}`);
+    if (nttWasmReady) {
+        const a = Array.from({length: 256}, (_, i) => BigInt(i % 7681));
+        const b = Array.from({length: 256}, (_, i) => BigInt((i * 2) % 7681));
+
+        const lwe = new BaseRingLWE() as any;
+        lwe.setNTTProtection({blinding: false, doubleCheck: false, enabled: false});
+
+        const was = (NttWasm as any).initializedWasm;
+        (NttWasm as any).initializedWasm = false;
+
+        const jsMs = await measurePerf("NTT multiply 256 JS", () => lwe.secureMultiply(a, b), 200);
+        (NttWasm as any).initializedWasm = was;
+
+        const wasmMs = await measurePerf("NTT multiply 256 WASM", () => lwe.secureMultiply(a, b), 200);
+        console.log(`  NTT speedup: ${(jsMs / wasmMs).toFixed(2)}x`);
+
+        const was2 = (NttWasm as any).initializedWasm;
+
+        // Handshake WASM vs JS
+        const aliceW = new QuarkDash({cipher: CipherType.Gimli});
+        const bobW = new QuarkDash({cipher: CipherType.Gimli});
+        const wasmHs = await measurePerf("Handshake NTT WASM (Gimli)", async () => {
+            const ap = await aliceW.generateKeyPair();
+            const bp = await bobW.generateKeyPair();
+            const ct = await aliceW.initializeSession(bp, true) as Uint8Array;
+            await bobW.initializeSession(ap, false);
+            await bobW.finalizeSession(ct);
+        }, 10);
+        (NttWasm as any).initializedWasm = false;
+
+        const aliceJ = new QuarkDash({cipher: CipherType.Gimli});
+        const bobJ = new QuarkDash({cipher: CipherType.Gimli});
+
+        (aliceJ as any).config.keyExchange.setNTTProtection({blinding: false, doubleCheck: false, enabled: false});
+        (bobJ as any).config.keyExchange.setNTTProtection({blinding: false, doubleCheck: false, enabled: false});
+
+        const jsHs = await measurePerf("Handshake NTT JS (Gimli)", async () => {
+            const ap = await aliceJ.generateKeyPair();
+            const bp = await bobJ.generateKeyPair();
+            const ct = await aliceJ.initializeSession(bp, true) as Uint8Array;
+            await bobJ.initializeSession(ap, false);
+            await bobJ.finalizeSession(ct);
+        }, 10);
+        console.log(`  Handshake speedup: ${(jsHs / wasmHs).toFixed(2)}x`);
+        (NttWasm as any).initializedWasm = was2;
+    }
+
+    // Force JS
     console.log("\n\x1b[1m%s\x1b[0m", "=== Lazy Keystream ===");
     const key = QuarkDashUtils.randomBytes(32);
     const nonce = QuarkDashUtils.randomBytes(12);
+
     const chacha = new QuarkDashChaCha(key, nonce);
     const gimli = new QuarkDashGimli(key, nonce);
+
     const big = QuarkDashUtils.randomBytes(2 * 1024 * 1024);
     const ksMs: Record<string, number> = {};
-    ksMs["ChaCha 2MB"] = await measurePerf("ChaCha lazy xor 2MB", () =>
-        (chacha as any).createKeystream().xor(big, 0),
-    );
-    ksMs["Gimli 2MB"] = await measurePerf("Gimli lazy xor 2MB", () =>
-        (gimli as any).createKeystream().xor(big, 0),
-    );
+
+    const forceJs = (flag: { v: boolean }, fn: () => any) => {
+        const wasG = (GimliWasm as any).initializedWasm, wasC = (ChaChaWasm as any).initializedWasm;
+        if (flag.v) {
+            (GimliWasm as any).initializedWasm = false;
+            (ChaChaWasm as any).initializedWasm = false;
+        }
+
+        const r = fn();
+        (GimliWasm as any).initializedWasm = wasG;
+        (ChaChaWasm as any).initializedWasm = wasC;
+
+        return r;
+    };
+
+    // JS baselines (force fallback)
+    {
+        const wasG = (GimliWasm as any).initializedWasm, wasC = (ChaChaWasm as any).initializedWasm;
+        (GimliWasm as any).initializedWasm = false;
+        (ChaChaWasm as any).initializedWasm = false;
+        ksMs["ChaCha 2MB JS"] = await measurePerf("ChaCha lazy xor 2MB JS", () => (chacha as any).createKeystream().xor(big, 0));
+        ksMs["Gimli 2MB JS"] = await measurePerf("Gimli lazy xor 2MB JS", () => (gimli as any).createKeystream().xor(big, 0));
+        (GimliWasm as any).initializedWasm = wasG;
+        (ChaChaWasm as any).initializedWasm = wasC;
+    }
+
+    if (gimliWasmReady || chachaWasmReady) {
+        ksMs["ChaCha 2MB WASM"] = await measurePerf("ChaCha lazy xor 2MB WASM", () => (chacha as any).createKeystream().xor(big, 0));
+        ksMs["Gimli 2MB WASM"] = await measurePerf("Gimli lazy xor 2MB WASM", () => (gimli as any).createKeystream().xor(big, 0));
+        if (ksMs["ChaCha 2MB JS"] && ksMs["ChaCha 2MB WASM"]) console.log(`  ChaCha speedup: ${(ksMs["ChaCha 2MB JS"] / ksMs["ChaCha 2MB WASM"]).toFixed(2)}x`);
+        if (ksMs["Gimli 2MB JS"] && ksMs["Gimli 2MB WASM"]) console.log(`  Gimli speedup: ${(ksMs["Gimli 2MB JS"] / ksMs["Gimli 2MB WASM"]).toFixed(2)}x`);
+    } else {
+        ksMs["ChaCha 2MB WASM"] = ksMs["ChaCha 2MB JS"];
+        ksMs["Gimli 2MB WASM"] = ksMs["Gimli 2MB JS"];
+    }
+
+    // verify
+    {
+        const wasG = (GimliWasm as any).initializedWasm, wasC = (ChaChaWasm as any).initializedWasm;
+        (GimliWasm as any).initializedWasm = false;
+        (ChaChaWasm as any).initializedWasm = false;
+
+        const js = (chacha as any).createKeystream().xor(big.slice(0, 1024), 0);
+        (GimliWasm as any).initializedWasm = wasG;
+        (ChaChaWasm as any).initializedWasm = wasC;
+
+        const wasm = (chacha as any).createKeystream().xor(big.slice(0, 1024), 0);
+        console.log(`ChaCha fallback check: ${Buffer.from(js).equals(Buffer.from(wasm)) ? "OK" : "MISMATCH"}`);
+
+        const gjs = (gimli as any).createKeystream().xor(big.slice(0, 1024), 0);
+        const was2 = (GimliWasm as any).initializedWasm;
+        (GimliWasm as any).initializedWasm = wasG;
+
+        const gwasm = (gimli as any).createKeystream().xor(big.slice(0, 1024), 0);
+        console.log(`Gimli fallback check: ${Buffer.from(gjs).equals(Buffer.from(gwasm)) ? "OK" : "MISMATCH"}`);
+    }
+
     ksMs["seek 64KB@1M"] = await measurePerf(
         "ChaCha getBytes seek 64KB @1M offset",
         () => (chacha as any).createKeystream().getBytes(1024 * 1024, 64 * 1024),
     );
+
     ksMs["blocks 32"] = await measurePerf(
         "ChaCha blocks generator 32 blocks",
         () => {
@@ -438,13 +566,14 @@ async function main() {
         "-",
         "",
     );
-    addRow(
-        "Keystream 2MB xor",
-        fmtMs(ksMs["Gimli 2MB"]),
-        fmtMs(ksMs["ChaCha 2MB"]),
-        "-",
-        "lazy seekable",
-    );
+    const gimliJsMs = ksMs["Gimli 2MB JS"] ?? ksMs["Gimli 2MB"];
+    const gimliWasmMs = ksMs["Gimli 2MB WASM"] ?? gimliJsMs;
+    const chachaJsMs = ksMs["ChaCha 2MB JS"] ?? ksMs["ChaCha 2MB"];
+    const chachaWasmMs = ksMs["ChaCha 2MB WASM"] ?? chachaJsMs;
+    addRow("Keystream 2MB Gimli JS", fmtMs(gimliJsMs), "-", "-", "lazy JS");
+    if (gimliWasmReady) addRow("Keystream 2MB Gimli WASM", fmtMs(gimliWasmMs), "-", "-", `WASM ${(gimliJsMs / gimliWasmMs).toFixed(2)}x`);
+    addRow("Keystream 2MB ChaCha JS", fmtMs(chachaJsMs), "-", "-", "lazy JS");
+    if (chachaWasmReady) addRow("Keystream 2MB ChaCha WASM", fmtMs(chachaWasmMs), "-", "-", `WASM ${(chachaJsMs / chachaWasmMs).toFixed(2)}x`);
     addRow(
         "Keystream seek 64KB@1M",
         fmtMs(ksMs["seek 64KB@1M"]),
