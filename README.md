@@ -287,22 +287,22 @@ Below I have described performance tests for QuarkDash Crypto Protocol.
 > **Please, note**. This benchmark is launched at Intel i5-12700H, 16GB RAM, Node.js 24
 
 
-| Operation                                                     | QuarkDash (ChaCha20) | QuarkDash (Gimli) |
+| Operation (in WASM mode)                                      | QuarkDash (ChaCha20) | QuarkDash (Gimli) |
 |---------------------------------------------------------------|----------------------|-------------------|
-| **Key generation**                                            | 0.6ms                | 0.7ms             |
-| **Session (Handshake)** (KEM)                                 | 2ms                  | 1.95ms            |
-| **Full Encryption with handshake** (1KB)                      | 0.4ms                | 0.18ms            |
-| **Full Decryption with handshake** (1KB)                      | 0.58ms               | 0.1ms             |
-| **Full Encryption with handshake** (1MB)                      | 32ms                 | 38ms              |
-| **Full Decryption with handshake** (1MB)                      | 26ms                 | 37ms              |
-| **Full Encryption with handshake (per-message nonce) (1KB)**  | 1.05ms               | 1.55ms            |
-| **Full Encryption with handshake (per-message nonce) (64KB)** | 7.5ms                | 3.32ms            |
-| **Full Encryption with handshake (per-message nonce) (1MB)**  | 35ms                 | 30ms              |
-| **Full Decryption with handshake (per-message nonce) (1KB)**  | 0.35ms               | 1.28ms            |
-| **Full Decryption with handshake (per-message nonce) (64KB)** | 2.23ms               | 3.75ms            |
-| **Full Decryption with handshake (per-message nonce) (1MB)**  | 26ms                 | 35ms              |
-| **Keystream** (2MB XOR)                                       | 26ms                 | 26ms              |
-| **Key rotation**                                              | 0.07ms               | 0.07ms            |
+| **Key generation**                                            | 0.57ms               | 0.58ms            |
+| **Session (Handshake)** (KEM)                                 | 1.83ms               | 4.4ms             |
+| **Full Encryption with handshake** (1KB)                      | 0.06ms               | 0.14ms            |
+| **Full Decryption with handshake** (1KB)                      | 0.05ms               | 0.08ms            |
+| **Full Encryption with handshake** (1MB)                      | 16.7ms               | 19.9ms            |
+| **Full Decryption with handshake** (1MB)                      | 17.03ms              | 18.31ms           |
+| **Full Encryption with handshake (per-message nonce) (1KB)**  | 1.06ms               | 1.31ms            |
+| **Full Encryption with handshake (per-message nonce) (64KB)** | 1.48ms               | 1.56ms            |
+| **Full Encryption with handshake (per-message nonce) (1MB)**  | 17.9ms               | 19.84ms           |
+| **Full Decryption with handshake (per-message nonce) (1KB)**  | 0.19ms               | 1.21ms            |
+| **Full Decryption with handshake (per-message nonce) (64KB)** | 1.31ms               | 1.42ms            |
+| **Full Decryption with handshake (per-message nonce) (1MB)**  | 17.03ms              | 18.31ms           |
+| **Keystream** (2MB)                                           | 4.1ms                | 6.6ms             |
+| **Key rotation**                                              | 0.05ms               | 0.05ms            |
 
 You can run benchmark on your machine using `npm run bench`
 

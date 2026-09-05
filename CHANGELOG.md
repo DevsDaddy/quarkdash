@@ -3,6 +3,24 @@
 Welcome to the **QuarkDash Crypto** changelog.
 Here you can find information about all stable algorithm versions.
 
+### v1.2.2: Performance update: WASM implementation of Gimli / ChaCha / NTT (with SIMD), threshold and fastest keystream (05.09.2026)
+In this version, we've moved the heaviest calculations to WebAssembly with SIMD optimizations. QuarkDash is now the fastest tool in its class (post-quantum encryption + lightweight stream ciphers).
+
+> **No breaking API changes.** Fallback to pure JS if WASM not available. **Minimal required Node version is bumped** to `Node >=18` (to support bulk-memory + SIMD default).
+
+> **For users:** encryption and decryption are 1.5-2 times faster, and keystream is 6 times faster.
+
+**🚀 Max performance: fastest in the world for this class:**
+- **Gimli / ChaCha WASM** (added implementations `assembly/gimli.ts`, `chacha.ts`): real `gimli_block`/`chacha_block` + bulk `gimli_xor`/`chacha_xor` with `v128` 16B `xor` + `u32` tail, `--enable simd --enable bulk-memory -O3`. Cached `key(32B)/nonce(12B)` in WASM memory (copy once per stream), `threshold 1024B` - `<1KB` stays JS to avoid call overhead, `≥1KB` goes bulk single-call.
+- **JS keystream fast-path** (`src/cipher/keystream.ts`): `DataView×3` to `Uint32Array`, `cacheQueue` without iterator alloc, sequential encrypt no longer pays `Map` churn.
+- **NTT (WASM-SIMD)** (`assembly/ntt.ts` + `src/session/ntt_wasm.ts`): fixed `A=0/B=1024/OUT=2048` layout, `memU32` view cache, no bump-alloc per multiply, `pointwise` scalar 4-unroll, `bulk_xor` via `v128`.
+- **Ring-LWE** (`src/session/baselwe.ts`): `naiveMultiply` for `N≤64`, early `N!==256` bypass, de-duplicated `normalize`, `secureMultiply` tries WASM once (and 2× only with `doubleCheck`).
+
+**🧩 Compatibility & fallback:**
+- `src/core/wasm_loader.ts` keeps `loadWasmModule` `fs` vs `fetch` + `Map` cache; WASM `importMemory 64/128` (4/8 MB) - iOS/Safari <15 or missing `bulk-memory` → `CompileError` caught → JS. `isSimdSupported`/`isBulkMemorySupported` kept for diagnostics but not gating (rely on compile fallback). All ciphers keep `isReady()` + `try {wasm} catch{fallback}` per `shake.ts` pattern.
+
+---
+
 ### v1.2.1: Performance and Correctness audit for NTT, SHA, SHAKE, KDF, KEX fixes (28.08.2026)
 
 > **No breaking API changes.** Idea, key exchange flow and `QuarkDash` public API unchanged. Only internal maths made correct. Ciphertext grows `512 → 544 B` (512 B still accepted for backward compat).
