@@ -10,15 +10,16 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1030
+ * @build           1035
  * @website         https://dev.to/devsdaddy
- * @updated         28.08.2026
+ * @updated         05.09.2026
  */
 /* Import required modules */
 import {QuarkDashUtils} from "../core/utils";
 import {SHA256} from "../hash/sha";
 import {ICryptoEncapsulated, ICryptoKeyPair} from "../core/types";
 import {DEFAULT_NTT_PROTECTION, NTTProtectionOptions} from "./ntt_protection";
+import {NttWasm} from "./ntt_wasm";
 
 /**
  * Base Ring LWE
@@ -384,7 +385,24 @@ export class BaseRingLWE {
      * @param b {bigint[]}
      * @protected
      */
+    protected naiveMultiply(a: bigint[], b: bigint[]): bigint[] {
+        const res = new Array<bigint>(this.N).fill(0n);
+        for (let i = 0; i < this.N; i++) if (a[i] !== 0n) for (let j = 0; j < this.N; j++) if (b[j] !== 0n) res[(i + j) % this.N] = (res[(i + j) % this.N] + a[i] * b[j]) % this.Q;
+        return res;
+    }
+
+    /**
+     * Secure Multiply
+     * @param a
+     * @param b
+     * @protected
+     */
     protected secureMultiply(a: bigint[], b: bigint[]): bigint[] {
+        if (a.length !== this.N || b.length !== this.N) return this.naiveMultiply(this.normalizePoly(a), this.normalizePoly(b));
+        if (this.N <= 64) {
+            const an = this.normalizePoly(a), bn = this.normalizePoly(b);
+            return this.naiveMultiply(an, bn);
+        }
         if (this.nttProtection.validateInputs) {
             this.validatePoly(a);
             this.validatePoly(b);
@@ -395,6 +413,10 @@ export class BaseRingLWE {
 
         // Fast way without NTT
         if (!this.nttProtection.enabled) {
+            if (NttWasm.isReady()) {
+                const wasmRes = NttWasm.multiply(aNorm, bNorm, this.Q, this.ROOT, this.INV_N);
+                if (wasmRes) return wasmRes;
+            }
             const aNTT = this.ntt(aNorm),
                 bNTT = this.ntt(bNorm);
             const prod = new Array<bigint>(this.N);
@@ -402,7 +424,6 @@ export class BaseRingLWE {
             return this.invNTT(prod);
         }
 
-        // blinding: a·r , b·r^{-1} : multiplication result doesn't change, but in-memory fingerprint is changing
         let aEff = aNorm,
             bEff = bNorm;
         if (this.nttProtection.blinding) {
@@ -412,6 +433,19 @@ export class BaseRingLWE {
             const inv = this.modInverse(blindingFactor, this.Q);
             aEff = aNorm.map((v) => (v * blindingFactor) % this.Q);
             bEff = bNorm.map((v) => (v * inv) % this.Q);
+        }
+
+        if (NttWasm.isReady()) {
+            const wasmRes = NttWasm.multiply(aEff, bEff, this.Q, this.ROOT, this.INV_N);
+            if (wasmRes) {
+                if (this.nttProtection.doubleCheck) {
+                    const wasmRes2 = NttWasm.multiply(aEff, bEff, this.Q, this.ROOT, this.INV_N);
+                    if (wasmRes2) {
+                        for (let i = 0; i < this.N; i++) if (wasmRes[i] !== wasmRes2[i]) throw new Error("NTT fault detected: double-check mismatch");
+                        return wasmRes;
+                    }
+                } else return wasmRes;
+            }
         }
 
         const aNTT = this.hardenedNTT(aEff);

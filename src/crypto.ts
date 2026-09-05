@@ -4,9 +4,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1030
+ * @build           1035
  * @website         https://dev.to/devsdaddy
- * @updated         28.08.2026
+ * @updated         05.09.2026
  */
 /* Import required modules */
 import {CipherFactory, CipherType} from "./cipher/cipher";
@@ -23,6 +23,9 @@ import {QuarkDashMAC} from "./core/mac";
 import {QuarkDashUtils} from "./core/utils";
 import {QuarkDashRRLWE} from "./session/rringlwe";
 import {isWasmShake, Shake256Wasm} from "./hash/shake";
+import {GimliWasm} from "./cipher/gimli_wasm";
+import {ChaChaWasm} from "./cipher/chacha_wasm";
+import {NttWasm} from "./session/ntt_wasm";
 import {
     DEFAULT_REKEY_POLICY,
     RekeyPolicy,
@@ -62,7 +65,7 @@ export interface QuarkDashOptions {
     timestampToleranceMs: number;
     rekey: QuarkDashRekeyOptions;
     usePerMessageNonce: boolean;
-    WASM: { isEnabled: boolean; shakePath: string };
+    WASM: { isEnabled: boolean; shakePath: string; gimliPath: string; chachaPath: string; nttPath: string };
 }
 
 /**
@@ -77,7 +80,13 @@ const DEFAULT_OPTIONS: QuarkDashOptions = {
     timestampToleranceMs: 300000,
     rekey: {policy: {...DEFAULT_REKEY_POLICY}, autoRekey: false},
     usePerMessageNonce: true,
-    WASM: {isEnabled: true, shakePath: "./wasm/shake.wasm"},
+    WASM: {
+        isEnabled: true,
+        shakePath: "./wasm/shake.wasm",
+        gimliPath: "./wasm/gimli.wasm",
+        chachaPath: "./wasm/chacha.wasm",
+        nttPath: "./wasm/ntt.wasm"
+    },
 };
 
 /**
@@ -134,11 +143,40 @@ export class QuarkDash implements ICryptoMethodAsync, ICryptoMethodSync {
      * Generate key pair
      */
     public async generateKeyPair(): Promise<Uint8Array> {
-        // Load WASM in lazy mode only if required
-        if (this.config.WASM.isEnabled && !isWasmShake())
-            await Shake256Wasm.initWasm(this.config.WASM.shakePath);
+        if (this.config.WASM.isEnabled) {
+            const tasks: Promise<void>[] = [];
+            if (!isWasmShake()) tasks.push(Shake256Wasm.initWasm(this.config.WASM.shakePath));
+            if (!GimliWasm.isReady()) tasks.push(GimliWasm.initWasm(this.config.WASM.gimliPath).catch(() => {
+            }));
+            if (!ChaChaWasm.isReady()) tasks.push(ChaChaWasm.initWasm(this.config.WASM.chachaPath).catch(() => {
+            }));
+            if (!NttWasm.isReady()) tasks.push(NttWasm.initWasm(this.config.WASM.nttPath).catch(() => {
+            }));
+            if (tasks.length) await Promise.all(tasks);
+        }
         this.myKeyPair = await this.config.keyExchange.generateKeyPair();
         return this.myKeyPair.publicKey;
+    }
+
+    /**
+     * Initialize WASM
+     * @param opts WASM Options
+     */
+    public static async initWasm(opts?: Partial<QuarkDashOptions["WASM"]>): Promise<void> {
+        const cfg = {...DEFAULT_OPTIONS.WASM, ...opts};
+        await Promise.all([
+            Shake256Wasm.initWasm(cfg.shakePath),
+            GimliWasm.initWasm(cfg.gimliPath),
+            ChaChaWasm.initWasm(cfg.chachaPath),
+            NttWasm.initWasm(cfg.nttPath),
+        ]);
+    }
+
+    /**
+     * Check WASM Modules is Ready
+     */
+    public static isWasmReady(): { shake: boolean; gimli: boolean; chacha: boolean; ntt: boolean } {
+        return {shake: isWasmShake(), gimli: GimliWasm.isReady(), chacha: ChaChaWasm.isReady(), ntt: NttWasm.isReady()};
     }
 
     /**

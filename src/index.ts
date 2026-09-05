@@ -4,9 +4,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.1
  * @author          Elijah Rastorguev
- * @build           1030
+ * @build           1035
  * @website         https://dev.to/devsdaddy
- * @updated         28.08.2026
+ * @updated         05.09.2026
  */
 /* Export Types and Utils */
 export * from "./core/types";
@@ -25,10 +25,13 @@ export * from "./hash/sha";
 export * from "./cipher/cipher";
 export * from "./cipher/chacha";
 export * from "./cipher/gimli";
+export * from "./cipher/gimli_wasm";
+export * from "./cipher/chacha_wasm";
 export * from "./cipher/keystream";
 export * from "./session/baselwe";
 export * from "./session/ringlwe";
 export * from "./session/rringlwe";
+export * from "./session/ntt_wasm";
 export * from "./session/rekey";
 export * from "./session/ntt_protection";
 export * from "./core/passphrase";

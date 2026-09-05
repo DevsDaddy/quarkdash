@@ -9,14 +9,15 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1028
+ * @build           1033
  * @website         https://dev.to/devsdaddy
- * @updated         28.08.2026
+ * @updated         05.09.2026
  */
 /* Import required modules */
 import {QuarkDashUtils} from "../core/utils";
 import {ICipher} from "../core/types";
 import {LazyKeystream} from "./keystream";
+import {GimliWasm} from "./gimli_wasm";
 
 /**
  * Gimpli Keystream Implementation
@@ -53,6 +54,10 @@ export class GimliKeystream extends LazyKeystream {
      * @param blockIndex {number} Block index
      */
     public generateBlock(blockIndex: number): Uint8Array {
+        if (GimliWasm.isReady()) {
+            const wasmOut = GimliWasm.gimliBlock(this.key, this.nonce, blockIndex);
+            if (wasmOut) return wasmOut;
+        }
         const k = this.key32, n = this.nonce32, w = this.work;
         w[0] = k[0];
         w[1] = k[1];
@@ -103,6 +108,33 @@ export class GimliKeystream extends LazyKeystream {
         o[10] = w[10];
         o[11] = w[11];
         return this.outBuf.slice();
+    }
+
+    /**
+     * Gimli XOR
+     * @param data {Uint8Array} Data
+     * @param keystreamOffset {number} Keystream offset
+     */
+    public override xor(data: Uint8Array, keystreamOffset: number = 0): Uint8Array {
+        if (data.length >= 1024 && GimliWasm.isReady()) {
+            const r = GimliWasm.gimliXor(this.key, this.nonce, data, keystreamOffset);
+            if (r) return r;
+        }
+        return super.xor(data, keystreamOffset);
+    }
+
+    /**
+     * XOR Into
+     * @param input {Uint8Array} Input
+     * @param output {Uint8Array} Output
+     * @param keystreamOffset {number} Keystream offset
+     */
+    public override xorInto(input: Uint8Array, output: Uint8Array, keystreamOffset: number = 0): void {
+        if (input.length >= 1024 && GimliWasm.isReady()) {
+            const r = GimliWasm.gimliXor(this.key, this.nonce, input, keystreamOffset);
+            if (r) { output.set(r); return; }
+        }
+        super.xorInto(input, output, keystreamOffset);
     }
 }
 
