@@ -6,9 +6,9 @@
  * @git             https://github.com/devsdaddy/quarkdash
  * @version         1.2.0
  * @author          Elijah Rastorguev
- * @build           1027
+ * @build           1030
  * @website         https://dev.to/devsdaddy
- * @updated         28.08.2026
+ * @updated         05.09.2026
  */
 /**
  * Keystream Generator Interface
@@ -72,6 +72,9 @@ export abstract class LazyKeystream implements IKeystreamGenerator {
     protected cachedBlocks = new Map<number, Uint8Array>();
     protected maxCacheBlocks = 64;
 
+    // Cache Queue
+    private cacheQueue: number[] = [];
+
     /**
      * Create keystream
      * @param blockSize {number} Block size
@@ -131,8 +134,7 @@ export abstract class LazyKeystream implements IKeystreamGenerator {
      * @param keystreamOffset {number} Offset
      */
     public xorInto(input: Uint8Array, output: Uint8Array, keystreamOffset: number = 0): void {
-        if (output.length < input.length)
-            throw new Error("Output buffer too small");
+        if (output.length < input.length) throw new Error("Output buffer too small");
         let remaining = input.length;
         let inPos = 0;
         let ksPos = keystreamOffset;
@@ -141,23 +143,17 @@ export abstract class LazyKeystream implements IKeystreamGenerator {
             const inBlockOffset = ksPos % this.blockSize;
             const block = this.getBlock(blockIdx);
             const take = Math.min(this.blockSize - inBlockOffset, remaining);
-            let i = 0;
-            const blockView = new DataView(block.buffer, block.byteOffset, block.byteLength);
-            const inView = new DataView(input.buffer, input.byteOffset + inPos, take);
-            const outView = new DataView(output.buffer, output.byteOffset + inPos, take);
-            const aligned = (inBlockOffset & 3) === 0 && (inPos & 3) === 0;
-            if (aligned) {
+            if ((inBlockOffset & 3) === 0 && (inPos & 3) === 0) {
                 const words = take >> 2;
-                for (let w = 0; w < words; w++) {
-                    const off = inBlockOffset + (w << 2);
-                    const kw = blockView.getUint32(off, true);
-                    const iw = inView.getUint32(w << 2, true);
-                    outView.setUint32(w << 2, kw ^ iw, true);
-                }
-                i = words << 2;
-            }
-            for (; i < take; i++) {
-                output[inPos + i] = input[inPos + i] ^ block[inBlockOffset + i];
+                const blockU32 = new Uint32Array(block.buffer, block.byteOffset + inBlockOffset, words);
+                const inU32 = new Uint32Array(input.buffer, input.byteOffset + inPos, words);
+                const outU32 = new Uint32Array(output.buffer, output.byteOffset + inPos, words);
+                for (let w = 0; w < words; w++) outU32[w] = blockU32[w] ^ inU32[w];
+                const tail = take & 3;
+                const base = words << 2;
+                for (let i = 0; i < tail; i++) output[inPos + base + i] = input[inPos + base + i] ^ block[inBlockOffset + base + i];
+            } else {
+                for (let i = 0; i < take; i++) output[inPos + i] = input[inPos + i] ^ block[inBlockOffset + i];
             }
             inPos += take;
             ksPos += take;
@@ -227,15 +223,13 @@ export abstract class LazyKeystream implements IKeystreamGenerator {
     protected getBlock(idx: number): Uint8Array {
         const cached = this.cachedBlocks.get(idx);
         if (cached) return cached;
-
         const block = this.generateBlock(idx);
-
-        // simple LRU: remove old cached data
         if (this.cachedBlocks.size >= this.maxCacheBlocks) {
-            const first = this.cachedBlocks.keys().next().value as number;
+            const first = this.cacheQueue.shift()!;
             this.cachedBlocks.delete(first);
         }
         this.cachedBlocks.set(idx, block);
+        this.cacheQueue.push(idx);
         return block;
     }
 
@@ -244,6 +238,7 @@ export abstract class LazyKeystream implements IKeystreamGenerator {
      */
     public clearCache(): void {
         this.cachedBlocks.clear();
+        this.cacheQueue.length = 0;
     }
 
     /**

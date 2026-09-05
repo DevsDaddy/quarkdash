@@ -1,6 +1,6 @@
 {
   "name": "quarkdash",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "QuarkDash - pure typescript hybrid cryptographic protocol that provides post-quantum security, high performance, and attack resistance.",
   "keywords": [
     "quark",
@@ -40,11 +40,15 @@
     "update-docs": "ts-node docutil.ts",
     "clean": "rm -rf dist",
     "build": "npm run clean && npm run update-docs && npm run build:esm && npm run build:cjs && npm run build:types && npm run copy_wasm",
-    "build:wasm": "asc assembly/shake.ts --importMemory --initialMemory 256 --maximumMemory 512 -O3 --outFile wasm/shake.wasm --exportRuntime",
+    "build:wasm": "npm run build:wasm:shake && npm run build:wasm:gimli && npm run build:wasm:chacha && npm run build:wasm:ntt",
+    "build:wasm:shake": "asc assembly/shake.ts --importMemory --initialMemory 256 --maximumMemory 512 -O3 --outFile wasm/shake.wasm --exportRuntime",
+    "build:wasm:gimli": "asc assembly/gimli.ts --importMemory --initialMemory 64 --maximumMemory 128 -O3 --enable simd --enable bulk-memory --outFile wasm/gimli.wasm --exportRuntime",
+    "build:wasm:chacha": "asc assembly/chacha.ts --importMemory --initialMemory 64 --maximumMemory 128 -O3 --enable simd --enable bulk-memory --outFile wasm/chacha.wasm --exportRuntime",
+    "build:wasm:ntt": "asc assembly/ntt.ts --importMemory --initialMemory 64 --maximumMemory 128 -O3 --enable simd --enable bulk-memory --outFile wasm/ntt.wasm --exportRuntime",
     "build:esm": "tsc -p tsconfig.json",
     "build:cjs": "tsc -p tsconfig.cjs.json",
     "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist/types",
-    "copy_wasm": "cp -r \"wasm/shake.wasm\" \"dist/\"",
+    "copy_wasm": "mkdir -p dist && cp -r wasm/*.wasm dist/",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "bench": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' benchmarks/bench.ts",
@@ -73,6 +77,6 @@
     "path": "^0.12.7"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   }
 }
